@@ -1,1 +1,19 @@
+# Environment — NEVER commit credentials
 .env
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+
+# macOS
+.DS_Store
+
+# Runtime-only — persisted via GitHub Actions cache, never committed
+feed_state.json
