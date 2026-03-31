@@ -10,9 +10,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
-    permissions:
-      contents: write        # Required for git-auto-commit-action to push archive commits
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -49,9 +46,3 @@ jobs:
 
       - name: Archive digest
         run: python archive.py
-
-      - name: Commit archive
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "digest: $(date +'%Y-%m-%d')"
-          file_pattern: digests/
