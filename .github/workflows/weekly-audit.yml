@@ -1,0 +1,32 @@
+name: Weekly Feed Audit
+
+on:
+  schedule:
+    - cron: '0 6 * * 0'   # 6 AM UTC every Sunday
+  workflow_dispatch:         # Manual trigger for testing
+
+jobs:
+  audit-feeds:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run feed audit
+        run: python audit_feeds.py
+
+      - name: Save refreshed feed state cache
+        uses: actions/cache/save@v4
+        with:
+          path: feed_state.json
+          key: feed-state-v1

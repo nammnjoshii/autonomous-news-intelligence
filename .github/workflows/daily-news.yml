@@ -1,0 +1,57 @@
+name: Daily News Digest
+
+on:
+  schedule:
+    - cron: '0 15 * * *'   # 3 PM UTC = 7 AM PST (winter). Change to '0 14 * * *' for PDT.
+  workflow_dispatch:         # Manual trigger for testing
+
+jobs:
+  send-digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    permissions:
+      contents: write        # Required for git-auto-commit-action to push archive commits
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Restore feed state cache
+        uses: actions/cache/restore@v4
+        with:
+          path: feed_state.json
+          key: feed-state-v1
+
+      - name: Validate feeds
+        run: python validate_feeds.py
+
+      - name: Save feed state cache
+        uses: actions/cache/save@v4
+        with:
+          path: feed_state.json
+          key: feed-state-v1
+
+      - name: Run digest pipeline
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
+          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+        run: python main.py
+
+      - name: Archive digest
+        run: python archive.py
+
+      - name: Commit archive
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "digest: $(date +'%Y-%m-%d')"
+          file_pattern: digests/
