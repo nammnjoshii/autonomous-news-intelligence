@@ -1,0 +1,101 @@
+[
+  {
+    "category": "Technology",
+    "urls": [
+      "https://techcrunch.com/feed/",
+      "https://www.theverge.com/rss/index.xml",
+      "https://feeds.arstechnica.com/arstechnica/index"
+    ],
+    "site_root": "https://techcrunch.com",
+    "credibility_score": 4,
+    "active": true
+  },
+  {
+    "category": "Finance",
+    "urls": [
+      "https://feeds.marketwatch.com/marketwatch/topstories/",
+      "https://www.cnbc.com/id/10000664/device/rss/rss.html",
+      "https://feeds.finance.yahoo.com/rss/2.0/headline"
+    ],
+    "site_root": "https://www.marketwatch.com",
+    "credibility_score": 4,
+    "active": true
+  },
+  {
+    "category": "Economy",
+    "urls": [
+      "https://feeds.apnews.com/rss/APf-economy",
+      "https://rss.nytimes.com/services/xml/rss/nyt/Economy.xml",
+      "https://www.economist.com/finance-and-economics/rss.xml"
+    ],
+    "site_root": "https://apnews.com",
+    "credibility_score": 5,
+    "active": true
+  },
+  {
+    "category": "Business",
+    "urls": [
+      "https://feeds.reuters.com/reuters/businessNews",
+      "https://fortune.com/feed/",
+      "https://feeds.bloomberg.com/markets/news.rss"
+    ],
+    "site_root": "https://www.reuters.com",
+    "credibility_score": 5,
+    "active": true
+  },
+  {
+    "category": "Politics",
+    "urls": [
+      "https://rss.politico.com/politics-news.xml",
+      "https://feeds.npr.org/1014/rss.xml",
+      "https://thehill.com/homenews/feed/"
+    ],
+    "site_root": "https://www.politico.com",
+    "credibility_score": 4,
+    "active": true
+  },
+  {
+    "category": "World",
+    "urls": [
+      "https://feeds.bbci.co.uk/news/world/rss.xml",
+      "https://feeds.reuters.com/Reuters/worldNews",
+      "https://rss.nytimes.com/services/xml/rss/nyt/World.xml"
+    ],
+    "site_root": "https://www.bbc.com",
+    "credibility_score": 5,
+    "active": true
+  },
+  {
+    "category": "Health",
+    "urls": [
+      "https://www.who.int/rss-feeds/news-english.xml",
+      "https://rss.webmd.com/rss/rss.aspx?RSSSource=RSS_PUBLIC",
+      "https://feeds.npr.org/1128/rss.xml"
+    ],
+    "site_root": "https://www.who.int",
+    "credibility_score": 5,
+    "active": true
+  },
+  {
+    "category": "Sports",
+    "urls": [
+      "https://www.espn.com/espn/rss/news",
+      "https://feeds.bbci.co.uk/sport/rss.xml",
+      "https://rss.nytimes.com/services/xml/rss/nyt/Sports.xml"
+    ],
+    "site_root": "https://www.espn.com",
+    "credibility_score": 4,
+    "active": true
+  },
+  {
+    "category": "Entertainment",
+    "urls": [
+      "https://variety.com/feed/",
+      "https://www.hollywoodreporter.com/feed/",
+      "https://deadline.com/feed/"
+    ],
+    "site_root": "https://variety.com",
+    "credibility_score": 4,
+    "active": true
+  }
+]
