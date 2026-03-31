@@ -331,3 +331,63 @@ Use lowercase. Be specific. Reference the file or module affected.
 ---
 
 *Keep this file current. If you change the architecture, scoring logic, schema, or pipeline order — update CLAUDE.md before closing the PR.*
+
+---
+
+## Field Notes
+
+Running log for future Claude instances. Add an entry whenever something fails, a workaround is found, or an approach is confirmed solid. Always include the date.
+
+---
+
+### What Worked
+
+| Date | Area | What | Why it worked |
+|------|------|------|---------------|
+| 2026-03-31 | Pipeline smoke test | `python main.py` end-to-end | 201 stories fetched, 9 categories ranked, 45 KB HTML generated, digest saved — validated every stage in one run |
+| 2026-03-31 | Feed resilience | 3-layer fallback (pool → autodiscovery → state cache) | Dead AP News and Reuters URLs fell through to backups automatically with zero intervention |
+| 2026-03-31 | Email delivery without domain | `SENDER_EMAIL=onboarding@resend.dev` | Resend's shared test address bypasses SPF/DKIM — pipeline runs end-to-end, emails land in spam but functional for testing |
+| 2026-03-31 | macOS pip | `pip3 install --break-system-packages` | Bypasses PEP 668 system Python restriction cleanly |
+| 2026-03-31 | mypy stubs for dateutil | `pip3 install types-python-dateutil --break-system-packages` | Resolves `import-untyped` error before running mypy |
+
+---
+
+### What Not to Try Again
+
+| Date | Area | What was tried | What to do instead |
+|------|------|----------------|--------------------|
+| 2026-03-31 | `main()` orchestration | Called `load_active_feeds()` directly | Always call `vf.validate_all_feeds()` — `load_active_feeds()` does not set `active_url`, which `fetch_stories()` requires |
+| 2026-03-31 | Intermediate smoke tests | Per-function temp scripts (`_test_fetch.py`, `_test_dedup.py`, etc.) | `python main.py` catches everything — intermediate scripts are redundant overhead |
+| 2026-03-31 | Lint cadence | `ruff` + `mypy` after every single file | Run once per logical task group — same errors caught, fewer round-trips |
+| 2026-03-31 | macOS pip | `pip install -r requirements.txt` without flags | Blocked by PEP 668 — always add `--break-system-packages` |
+| 2026-03-31 | Write tool on new files | Used Write tool without a prior Read on a non-existent file | Write requires a prior Read — use `Bash cat heredoc` for brand-new files |
+| 2026-03-31 | Skills ceremony | Installed 7 skills before writing any code | Only invoke skills that add constraints not already in CLAUDE.md — rest is ceremony |
+| 2026-03-31 | Commit granularity | Committed after every task (15+ commits on greenfield) | Commit at logical milestones: foundation → pipeline → workflows → launch |
+| 2026-03-31 | Parallel file writes | Wrote independent files sequentially | Files with no dependencies must be written in parallel — default to parallel tool calls |
+
+---
+
+## User Preferences — How to Work in This Project
+
+These are execution preferences derived from retrospective review. Follow them on every implementation task.
+
+**Parallelise independent work.**
+Files with no dependencies on each other (config, requirements, registry, gitignore) must be written in parallel, not sequentially. Default to parallel tool calls unless a strict dependency exists.
+
+**One end-to-end smoke test, not per-function tests.**
+The pipeline is linear. `python main.py` validates every stage. Do not create intermediate temp test scripts for individual functions — they catch nothing the final run won't catch and add unnecessary round-trips.
+
+**One lint pass per logical group, not per file.**
+Run `ruff check --fix` + `mypy` once per task group (foundation, pipeline, workflows), not after every individual file edit.
+
+**Catch data flow gaps during planning, not during execution.**
+Before writing any code, trace how data moves through the pipeline end-to-end. Specifically: confirm which function sets a key on a dict and which function consumes it. Missing this (e.g. `active_url` propagation) costs more total time than the upfront reasoning.
+
+**Skip skills that restate CLAUDE.md.**
+Only invoke skills that add constraints not already covered here. Skills that duplicate CLAUDE.md content are ceremony — skip them.
+
+**Anticipate macOS pip constraints.**
+Always use `pip3 install --break-system-packages` on macOS with system Python. Do not wait to hit the PEP 668 error.
+
+**Fewer, meaningful commits.**
+For greenfield work: foundation → pipeline logic → workflows → launch. Do not commit after every task. Commit at logical milestones.
