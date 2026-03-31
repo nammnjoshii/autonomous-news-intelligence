@@ -25,7 +25,7 @@ Then you just say: "check the skill bank for this task" — Claude auto-reads CA
 The pipeline runs in this exact sequence. Do not reorder steps.
 
 ```
-1. validate_feeds.py   →  Preflight check: confirm feeds return content, activate backups
+1. validate_feeds.py   →  Load feed state cache → try URL pool per category → autodiscover on failure → save updated state
 2. main.py             →  Fetch → Deduplicate → Score → Rank → Detect Trends → Generate Email → Send
 3. archive.py          →  Save digest to /digests/YYYY-MM-DD.html → Prune files > 90 days
 ```
@@ -39,12 +39,16 @@ The pipeline runs in this exact sequence. Do not reorder steps.
 | File | Responsibility |
 |---|---|
 | `main.py` | Orchestrates the full pipeline. Entry point. |
-| `validate_feeds.py` | Pings all feeds, logs failures, activates backup feeds. Exits with code 1 if all feeds for a category fail. |
+| `validate_feeds.py` | Loads feed state, tries URL pool per category, runs autodiscovery on failure, saves updated state. Exits with code 1 only if no URL works for any category. |
+| `feed_discovery.py` | Auto-discovers a working feed URL when all pool URLs for a category fail. Scrapes `site_root` for `<link rel="alternate">` tags, then tries common patterns. Stdlib only (`urllib`, `html.parser`). |
+| `audit_feeds.py` | Weekly audit. Ignores cached state — retests all URLs fresh. Runs discovery for dead ones. Rebuilds `feed_state.json`. Outputs GitHub Actions step summary. |
 | `archive.py` | Saves the generated HTML digest to `/digests/`, deletes files older than `ARCHIVE_RETENTION_DAYS`. |
 | `config.py` | All tunable parameters. Single source of truth for weights, thresholds, and constants. |
 | `rss_feeds.json` | Feed registry. All feed metadata lives here. Never hardcode a feed URL in Python. |
+| `feed_state.json` | Runtime feed health state. Tracks URL status and discovered replacements. Never committed — persisted between runs via GitHub Actions cache. |
 | `requirements.txt` | Pinned dependencies. Do not add libraries without a clear reason. |
-| `.github/workflows/daily-news.yml` | GitHub Actions cron workflow. |
+| `.github/workflows/daily-news.yml` | Daily cron workflow. Includes cache restore/save steps around `validate_feeds.py`. |
+| `.github/workflows/weekly-audit.yml` | Weekly audit workflow. Runs `audit_feeds.py` every Sunday to retest all feeds and refresh the state cache. |
 | `digests/` | Rolling archive of sent HTML digests. Auto-managed by `archive.py`. Do not manually edit. |
 
 ---
@@ -86,8 +90,12 @@ Each feed entry must follow this schema exactly. Do not add undocumented fields.
 ```json
 {
   "category": "Technology",
-  "primary_url": "https://techcrunch.com/feed/",
-  "backup_url": "https://www.theverge.com/rss/index.xml",
+  "urls": [
+    "https://techcrunch.com/feed/",
+    "https://www.theverge.com/rss/index.xml",
+    "https://feeds.arstechnica.com/arstechnica/index"
+  ],
+  "site_root": "https://techcrunch.com",
   "credibility_score": 4,
   "active": true
 }
@@ -95,14 +103,58 @@ Each feed entry must follow this schema exactly. Do not add undocumented fields.
 
 **Field rules:**
 - `category` must match exactly one of the 9 defined categories. Case-sensitive.
+- `urls` is an ordered array of RSS feed URLs. Tried in sequence at runtime; first working URL wins. Maintain 3–5 per category. Never leave empty.
+- `site_root` is the canonical homepage URL used by `feed_discovery.py` when all `urls` fail. Must be the actual HTML page where `<link rel="alternate">` tags appear — not a redirect or CDN URL.
 - `credibility_score` is an integer 1–5. Assigned manually. See README for scoring guide.
 - `active: false` disables the entry without deleting it. Use this to temporarily pause a feed.
-- Both `primary_url` and `backup_url` are required. Never leave `backup_url` null.
 
 **Valid categories (exact strings):**
 ```
 Technology, Finance, Economy, Business, Politics, World, Health, Sports, Entertainment
 ```
+
+---
+
+## Feed Resilience System
+
+The pipeline uses a three-layer fallback to stay running without manual intervention when feed URLs change or go dead.
+
+**Layer 1 — URL Pool (`rss_feeds.json`):** Each category has 3–5 ordered URLs. `validate_feeds.py` tries them in sequence; first working URL wins. Human-managed. Update when you want to swap sources.
+
+**Layer 2 — Autodiscovery (`feed_discovery.py`):** If all pool URLs for a category fail, `feed_discovery.py` attempts to locate the current feed:
+1. Fetch `site_root` with `urllib.request`
+2. Parse for `<link rel="alternate" type="application/rss+xml">` using `html.parser`
+3. If found, validate with `feedparser` (must return ≥ 1 entry)
+4. If not found, try common path patterns against `site_root`: `/feed/`, `/rss/`, `/rss.xml`, `/feed.xml`, `/atom.xml`, `/?feed=rss2`
+5. Return first URL that passes validation, or `None`
+
+Uses Python stdlib only. No new dependencies.
+
+**Layer 3 — State Cache (`feed_state.json`):** Discovered replacements and known-dead URLs are persisted between runs via GitHub Actions cache (key: `feed-state-v1`). This means the pipeline doesn't re-test dead URLs or re-run discovery on every daily run.
+
+`feed_state.json` schema:
+```json
+{
+  "last_updated": "2026-03-31T15:00:00Z",
+  "urls": {
+    "https://techcrunch.com/feed/": {
+      "status": "healthy",
+      "last_checked": "2026-03-31T15:00:00Z"
+    },
+    "https://oldfeed.example.com/rss": {
+      "status": "dead",
+      "last_checked": "2026-03-30T15:00:00Z",
+      "discovered_replacement": "https://newfeed.example.com/feed/"
+    }
+  }
+}
+```
+
+Valid `status` values: `healthy`, `dead`.
+
+**This file is never committed.** It lives only in the GitHub Actions cache. If the cache is evicted (7-day TTL), the next run pays the full discovery cost once and rebuilds it automatically — no pipeline failure, no human action needed.
+
+**Weekly audit (`audit_feeds.py`):** Runs every Sunday via `weekly-audit.yml`. Ignores cached state — retests all URLs fresh, re-runs discovery for any dead ones, writes a fresh `feed_state.json` back to cache. Outputs a GitHub Actions step summary showing which categories are healthy, which had dead URLs, and what was discovered. This is how you stay informed without having to check manually.
 
 ---
 
@@ -172,7 +224,7 @@ Use Python's built-in `collections.Counter` for frequency counting. Do not add N
 
 ## Error Handling Conventions
 
-- **Feed failures:** Log a warning. Activate backup. If backup also fails, log the category as unavailable and include a notice in the email. Never raise an unhandled exception for a single feed failure.
+- **Feed failures:** Log a warning. Try next URL in the pool. If all pool URLs fail, run `feed_discovery.py`. If discovery succeeds, log the discovered URL and use it for this run (persisted to state cache). If discovery also fails, log the category as unavailable and include a notice in the email. Never raise an unhandled exception for a single feed failure.
 - **Scoring errors:** If `published_date` is missing or unparseable, default `recency_score` to 0.0. Log a warning. Do not skip the story.
 - **Resend failures:** Raise the exception. Let GitHub Actions catch it and mark the run as failed. This triggers GitHub's built-in failure notification.
 - **Archive failures:** Log a warning. Do not raise. A failed archive is not worth blocking the pipeline over.
@@ -234,7 +286,7 @@ If you add unit tests in the future, use Python's built-in `unittest` module. Do
 ## What Not to Do
 
 - Do not use classes where functions are sufficient. The pipeline is linear — keep it that way.
-- Do not add a database. Feed state is not persisted between runs by design.
+- Do not add a database. Feed health state is persisted via GitHub Actions cache only — not a database, not a committed file.
 - Do not add a web server, API layer, or UI. This runs headless on a cron.
 - Do not add logging that outputs sensitive data (email addresses, API keys, full story content).
 - Do not modify files in `/digests/` manually. They are auto-managed by `archive.py`.
@@ -256,24 +308,11 @@ If you add unit tests in the future, use Python's built-in `unittest` module. Do
 
 ## Adding a New Feed to an Existing Category
 
-1. Update the `primary_url` or `backup_url` in `rss_feeds.json`.
-2. Run `validate_feeds.py` to confirm the URL returns parseable content.
-3. Assign a `credibility_score` using the guide in README.md.
-4. Test locally before pushing.
-
----
-
-## v2 Features (Do Not Implement in v1)
-
-Document only. Implement only when explicitly requested.
-
-| Feature | Notes |
-|---|---|
-| Semantic deduplication | `sentence-transformers` all-MiniLM-L6-v2. Local inference. No API cost. |
-| AI-generated summaries | Anthropic API. Requires API key in GitHub Secrets. |
-| Region filtering | Add `region` field to `rss_feeds.json`. Filter at collection stage. |
-| Historical trend analytics | Parse `/digests/` HTML files. Export keyword frequency to CSV. |
-| Multi-recipient support | Resend broadcast or dynamic templates. Requires unsubscribe logic before use. |
+1. Add the new URL to the `urls` array in `rss_feeds.json` for that category. Position it by priority (first = most preferred).
+2. Confirm `site_root` is set to the correct homepage for autodiscovery.
+3. Run `validate_feeds.py` to confirm the URL returns parseable content.
+4. Assign or confirm a `credibility_score` using the guide in README.md.
+5. Test locally before pushing.
 
 ---
 

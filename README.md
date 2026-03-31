@@ -21,9 +21,11 @@ Pulls RSS feeds across 9 categories, deduplicates and ranks stories by recency a
 ## Architecture
 
 ```
-RSS Feeds (Primary + Backup per category)
+RSS Feeds (URL Pool per category, 3–5 sources)
         ↓
-Feed Validator      →    Log dead/empty feeds, activate backups
+Feed State Cache    →    Load known-healthy / known-dead URLs (GitHub Actions cache)
+        ↓
+Feed Validator      →    Try pool in order → autodiscover on total failure → save updated state
         ↓
 Collector           →    Parse titles, summaries, links, dates, sources
         ↓
@@ -50,17 +52,23 @@ Archiver            →    Save to /digests/, prune files > 90 days
 daily-news-digest/
 │
 ├── main.py                   # Core pipeline: fetch → dedupe → rank → email
-├── validate_feeds.py         # Preflight feed health check
+├── validate_feeds.py         # Preflight: try URL pool, autodiscover on failure, save state
+├── feed_discovery.py         # Auto-discovers feed URL from site homepage when pool fails
+├── audit_feeds.py            # Weekly audit: retest all feeds fresh, rebuild state cache
 ├── archive.py                # Save digest + prune old files
 ├── config.py                 # Scoring weights, thresholds, timezone
 ├── requirements.txt          # Python dependencies
-├── rss_feeds.json            # Feed registry: URL, category, credibility, backup
+├── rss_feeds.json            # Feed registry: URL pool (3–5), category, credibility, site root
 ├── README.md                 # This file
 ├── CLAUDE.md                 # Context file for Claude Code
 │
+│   # feed_state.json — runtime only, never committed
+│   # Persisted between runs via GitHub Actions cache (key: feed-state-v1)
+│
 ├── .github/
 │   └── workflows/
-│       └── daily-news.yml    # GitHub Actions cron workflow
+│       ├── daily-news.yml    # Daily cron workflow (includes cache restore/save)
+│       └── weekly-audit.yml  # Weekly feed health audit (every Sunday)
 │
 └── digests/
     └── YYYY-MM-DD.html       # Rolling 90-day archive of sent digests
@@ -180,12 +188,20 @@ Each entry follows this schema:
 ```json
 {
   "category": "Technology",
-  "primary_url": "https://techcrunch.com/feed/",
-  "backup_url": "https://www.theverge.com/rss/index.xml",
+  "urls": [
+    "https://techcrunch.com/feed/",
+    "https://www.theverge.com/rss/index.xml",
+    "https://feeds.arstechnica.com/arstechnica/index"
+  ],
+  "site_root": "https://techcrunch.com",
   "credibility_score": 4,
   "active": true
 }
 ```
+
+- `urls`: Ordered pool of 3–5 feed URLs. Tried in sequence at runtime; first working URL wins. Add more to make a category more resilient.
+- `site_root`: Canonical homepage. Used by the autodiscovery system to find a new feed URL if all `urls` fail. Must be the actual HTML page (not a redirect or CDN URL).
+- `active: false`: Disables the entry without deleting it.
 
 **Credibility scoring guide:**
 
@@ -195,7 +211,7 @@ Each entry follows this schema:
 | 4 | Established trade/vertical press — TechCrunch, Politico, ESPN |
 | 3 | Reputable secondary sources — CBC, MarketWatch |
 | 2 | Aggregators or mixed-quality sources |
-| 1 | Use as backup only |
+| 1 | Use as last resort in pool |
 
 Assign scores once during setup. Revisit quarterly or when you notice ranking drift.
 
@@ -214,7 +230,9 @@ Or use a seasonal comment in the workflow file to remind yourself to update it a
 
 ## GitHub Actions Workflow
 
-The workflow lives at `.github/workflows/daily-news.yml`.
+The pipeline uses two workflows: a daily digest workflow and a weekly feed audit.
+
+### Daily Digest (`daily-news.yml`)
 
 ```yaml
 name: Daily News Digest
@@ -239,8 +257,22 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Restore feed state cache
+        uses: actions/cache@v4
+        with:
+          path: feed_state.json
+          key: feed-state-v1
+          restore-keys: feed-state-
+
       - name: Validate feeds
         run: python validate_feeds.py
+
+      - name: Save feed state cache
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: feed_state.json
+          key: feed-state-v1-${{ github.run_id }}
 
       - name: Run digest pipeline
         env:
@@ -259,9 +291,49 @@ jobs:
           file_pattern: digests/
 ```
 
+### Weekly Feed Audit (`weekly-audit.yml`)
+
+Runs every Sunday. Retests all feed URLs fresh (ignores cached state), runs autodiscovery for any dead ones, and rebuilds the state cache. Check the Actions tab → **Weekly Feed Audit** → latest run → **Step Summary** to see which categories are healthy and what was discovered.
+
+```yaml
+name: Weekly Feed Audit
+
+on:
+  schedule:
+    - cron: '0 10 * * 0'   # Every Sunday 10 AM UTC
+  workflow_dispatch:
+
+jobs:
+  audit-feeds:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+
+      - name: Restore feed state cache
+        uses: actions/cache@v4
+        with:
+          path: feed_state.json
+          key: feed-state-v1
+          restore-keys: feed-state-
+
+      - name: Run feed audit
+        run: python audit_feeds.py
+
+      - name: Save refreshed feed state cache
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: feed_state.json
+          key: feed-state-v1-audit-${{ github.run_id }}
+```
+
 **Error notifications:** If any step exits with a non-zero code, GitHub Actions marks the run as failed and sends an email notification to your GitHub account automatically. No extra alerting setup required.
 
-Trigger a manual run anytime from the **Actions** tab → **Daily News Digest** → **Run workflow**.
+Trigger a manual run anytime from the **Actions** tab → select workflow → **Run workflow**.
 
 ---
 
@@ -269,7 +341,10 @@ Trigger a manual run anytime from the **Actions** tab → **Daily News Digest** 
 
 Complete these in order before enabling the scheduled cron.
 
-- [ ] Run `validate_feeds.py` — all primary or backup feeds return content
+- [ ] Add 3–5 URLs to the `urls` pool for each category in `rss_feeds.json`
+- [ ] Set `site_root` for every entry in `rss_feeds.json`
+- [ ] Run `validate_feeds.py` — at least one URL per category returns content
+- [ ] Run `python audit_feeds.py` locally to confirm autodiscovery works for your sources
 - [ ] Assign credibility scores to all sources in `rss_feeds.json`
 - [ ] Verified sender domain active in Resend (or using onboarding@resend.dev for first test)
 - [ ] SPF record added to DNS
@@ -318,10 +393,13 @@ Inline CSS only. Mobile-first layout (max-width 600px). No external images. Rend
 SPF or DKIM is not verified. Check DNS propagation with [MXToolbox](https://mxtoolbox.com/spf.aspx). Confirm DKIM records are verified inside Resend before retesting.
 
 **A category shows fewer than 5 stories.**
-The feed returned fewer items than expected. Check `validate_feeds.py` output. Update the backup feed URL in `rss_feeds.json`.
+The feed returned fewer items than expected. Check `validate_feeds.py` output. Add more URLs to that category's `urls` pool in `rss_feeds.json`.
 
 **Pipeline fails silently.**
-Check the Actions run log under the failed step. Common causes: expired Resend API key, dead primary and backup feed, or a malformed `rss_feeds.json` entry.
+Check the Actions run log under the failed step. Common causes: expired Resend API key, all pool URLs dead and autodiscovery failed, or a malformed `rss_feeds.json` entry. Check the weekly audit step summary for feed health detail.
+
+**Feed state cache was evicted.**
+This is not a failure. The next daily run will re-test the full pool and re-run discovery as needed, then rebuild the cache automatically. No action required.
 
 **Duplicates appearing in the digest.**
 Lower `FUZZY_MATCH_THRESHOLD` in `config.py` (e.g., from 0.85 to 0.80) to increase deduplication aggressiveness. Test locally before pushing.
@@ -340,22 +418,6 @@ python-dateutil==2.9.0    # Date parsing and timezone handling
 ```
 
 No heavy dependencies. No LLM APIs. No external databases. The entire pipeline runs inside a GitHub-hosted runner in under 60 seconds.
-
----
-
-## v2 Roadmap
-
-These are documented here for future implementation — not in scope for v1.
-
-| Feature | Approach | Effort |
-|---|---|---|
-| Semantic deduplication | `sentence-transformers` (all-MiniLM-L6-v2, runs locally) | Medium |
-| AI-generated summaries | Anthropic API or local Ollama | Medium |
-| Region filtering | Add `region` field to `rss_feeds.json` | Low |
-| Historical trend analytics | Parse `/digests/` folder, export keyword CSV | Low |
-| Feed health dashboard | Weekly summary of feed uptime and story volume | Low |
-
-Build v1 completely before touching any of these.
 
 ---
 
