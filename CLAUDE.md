@@ -13,7 +13,7 @@ There is no web server, no database, no UI, and no user input at runtime. The pi
 ---
 
 ## Skill Bank
-Path: /Users/khuushaliraja/Desktop/Nammn AI Practice/skill-bank-refactored/CATALOG.md
+Path: <skill-bank-path>/CATALOG.md
 
 Before starting any significant implementation task, read CATALOG.md, detect the project type from files in this directory, load the relevant bundle, and identify applicable skills.
 Then you just say: "check the skill bank for this task" — Claude auto-reads CATALOG.md without you specifying the path each time.
