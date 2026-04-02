@@ -4,7 +4,7 @@
 # --- Scoring ---
 RECENCY_WEIGHT = 0.6          # Weight for recency in composite score (0.0–1.0)
 CREDIBILITY_WEIGHT = 0.4      # Weight for source credibility (must sum to 1.0 with RECENCY_WEIGHT)
-RECENCY_DECAY_HOURS = 48      # Hours over which recency score decays from 1.0 to 0.0
+RECENCY_DECAY_HOURS = 24      # Hours over which recency score decays from 1.0 to 0.0
 
 # --- Deduplication ---
 FUZZY_MATCH_THRESHOLD = 0.85  # difflib SequenceMatcher ratio. Range 0.80–0.90.
