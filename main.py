@@ -687,10 +687,13 @@ def generate_html(
         for i, story in enumerate(top5_world, start=1):
             parts.append(story_block(story, i))
 
+    # Stories already rendered in Top 5 sections — exclude from category sections
+    top5_links: set[str] = {s["link"] for s in (top5_canada + top5_usa + top5_world)}
+
     # --- Canada Coverage ---
     parts.append(f'<div style="{GROUP_HEADER_STYLE}">&#x1F1E8;&#x1F1E6; Canada Coverage</div>')
     for category in CA_CATEGORY_ORDER:
-        cat_stories = ranked_by_category_ca.get(category, [])
+        cat_stories = [s for s in ranked_by_category_ca.get(category, []) if s["link"] not in top5_links]
         if not cat_stories:
             continue
         parts.append(f'<div style="{SECTION_HEADER_STYLE}">&#x1F4C2; {category}</div>')
@@ -700,7 +703,7 @@ def generate_html(
     # --- International Coverage ---
     parts.append(f'<div style="{GROUP_HEADER_STYLE}">&#x1F30E; International Coverage</div>')
     for category in INTL_CATEGORY_ORDER:
-        cat_stories = ranked_by_category_usa_world.get(category, [])
+        cat_stories = [s for s in ranked_by_category_usa_world.get(category, []) if s["link"] not in top5_links]
         if not cat_stories:
             continue
         parts.append(f'<div style="{SECTION_HEADER_STYLE}">&#x1F4C2; {category}</div>')
