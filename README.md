@@ -1,5 +1,8 @@
 # Daily News Digest
 
+[![Daily Digest](https://github.com/nammnjoshii/daily-news-digest/actions/workflows/daily-news.yml/badge.svg)](https://github.com/nammnjoshii/daily-news-digest/actions/workflows/daily-news.yml)
+[![Weekly Feed Audit](https://github.com/nammnjoshii/daily-news-digest/actions/workflows/weekly-audit.yml/badge.svg)](https://github.com/nammnjoshii/daily-news-digest/actions/workflows/weekly-audit.yml)
+
 A fully automated, zero-cost news digest delivered to your inbox every morning. Built with Python and GitHub Actions. No servers. No subscriptions. No maintenance.
 
 ---
@@ -60,7 +63,9 @@ daily-news-digest/
 ├── requirements.txt          # Python dependencies
 ├── rss_feeds.json            # Feed registry: URL pool (3–5), category, credibility, site root
 ├── README.md                 # This file
-├── CLAUDE.md                 # Context file for Claude Code
+├── ARCHITECTURE.md           # Engineering reference: pipeline logic, schemas, conventions
+├── tests/
+│   └── test_pipeline.py      # Unit tests for pure pipeline functions
 │
 │   # feed_state.json — runtime only, never committed
 │   # Persisted between runs via GitHub Actions cache (key: feed-state-v1)
@@ -187,6 +192,7 @@ Each entry follows this schema:
 
 ```json
 {
+  "name": "TechCrunch",
   "category": "Technology",
   "urls": [
     "https://techcrunch.com/feed/",
@@ -195,6 +201,7 @@ Each entry follows this schema:
   ],
   "site_root": "https://techcrunch.com",
   "credibility_score": 4,
+  "region": "usa",
   "active": true
 }
 ```

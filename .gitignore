@@ -15,5 +15,9 @@ build/
 # macOS
 .DS_Store
 
+# AI tooling — not part of the project
+.claude/
+CLAUDE.md
+
 # Runtime-only — persisted via GitHub Actions cache, never committed
 feed_state.json

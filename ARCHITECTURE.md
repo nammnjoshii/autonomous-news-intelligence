@@ -1,28 +1,20 @@
-# CLAUDE.md — Daily News Digest
+# ARCHITECTURE.md — Daily News Digest
 
-This file gives Claude Code the context it needs to work effectively in this codebase. Read it before writing, editing, or debugging any file in this project.
+Engineering reference for this codebase. Covers architecture, file responsibilities, configuration, schemas, pipeline logic, and operational conventions.
 
 ---
 
 ## Project Purpose
 
-This is a single-recipient, zero-cost, fully automated daily news digest. It runs on GitHub Actions every morning, pulls RSS feeds across 10 categories (BC/West Coast first, then Canadian, then US, then World), ranks and deduplicates stories with geographic prioritization, detects trending topics, generates an HTML email, and delivers it via Resend.
+A single-recipient, zero-cost, fully automated daily news digest. Runs on GitHub Actions every morning, pulls RSS feeds across 10 categories (BC/West Coast first, then Canadian, then US, then World), ranks and deduplicates stories with geographic prioritization, detects trending topics, generates an HTML email, and delivers it via Resend.
 
-There is no web server, no database, no UI, and no user input at runtime. The pipeline runs once per day and exits.
-
----
-
-## Skill Bank
-Path: <skill-bank-path>/CATALOG.md
-
-Before starting any significant implementation task, read CATALOG.md, detect the project type from files in this directory, load the relevant bundle, and identify applicable skills.
-Then you just say: "check the skill bank for this task" — Claude auto-reads CATALOG.md without you specifying the path each time.
+No web server. No database. No UI. No user input at runtime. The pipeline runs once per day and exits.
 
 ---
 
-## Architecture Overview
+## Pipeline Sequence
 
-The pipeline runs in this exact sequence. Do not reorder steps.
+Do not reorder steps.
 
 ```
 1. validate_feeds.py   →  Load feed state cache → try URL pool per category → autodiscover on failure → save updated state
@@ -30,7 +22,7 @@ The pipeline runs in this exact sequence. Do not reorder steps.
 3. archive.py          →  Save digest to /digests/YYYY-MM-DD.html → Prune files > 90 days
 ```
 
-`main.py` is the core. It calls internal modules in sequence. Each stage is a discrete function — not a class, not a framework. Keep it readable.
+`main.py` is the core. It calls internal modules in sequence. Each stage is a discrete function — not a class, not a framework.
 
 ---
 
@@ -50,6 +42,7 @@ The pipeline runs in this exact sequence. Do not reorder steps.
 | `.github/workflows/daily-news.yml` | Daily cron workflow. Includes cache restore/save steps around `validate_feeds.py`. |
 | `.github/workflows/weekly-audit.yml` | Weekly audit workflow. Runs `audit_feeds.py` every Sunday to retest all feeds and refresh the state cache. |
 | `digests/` | Rolling archive of sent HTML digests. Auto-managed by `archive.py`. Do not manually edit. |
+| `tests/` | Unit tests for pure pipeline functions. Run with `python -m pytest tests/` or `python -m unittest discover tests`. |
 
 ---
 
@@ -61,7 +54,7 @@ All tunable values live in `config.py`. When adjusting behavior, change config �
 # Scoring
 RECENCY_WEIGHT = 0.6          # Weight for recency in composite score (0.0–1.0)
 CREDIBILITY_WEIGHT = 0.4      # Weight for source credibility (must sum to 1.0 with RECENCY_WEIGHT)
-RECENCY_DECAY_HOURS = 48      # Hours over which recency score decays from 1.0 to 0.0
+RECENCY_DECAY_HOURS = 24      # Hours over which recency score decays from 1.0 to 0.0
 
 # Deduplication
 FUZZY_MATCH_THRESHOLD = 0.85  # difflib SequenceMatcher ratio. Range: 0.0–1.0.
@@ -98,16 +91,15 @@ Each feed entry must follow this schema exactly. Do not add undocumented fields.
 
 ```json
 {
-  "name": "TechCrunch",
-  "category": "Technology",
+  "name": "CBC News",
+  "category": "BC / West Coast",
   "urls": [
-    "https://techcrunch.com/feed/",
-    "https://www.theverge.com/rss/index.xml",
-    "https://feeds.arstechnica.com/arstechnica/index"
+    "https://www.cbc.ca/cmlink/rss-canada-britishcolumbia",
+    "https://globalnews.ca/bc/feed/"
   ],
-  "site_root": "https://techcrunch.com",
-  "credibility_score": 4,
-  "region": "usa",
+  "site_root": "https://www.cbc.ca",
+  "credibility_score": 5,
+  "region": "canada_west",
   "active": true
 }
 ```
@@ -167,9 +159,9 @@ Uses Python stdlib only. No new dependencies.
 
 Valid `status` values: `healthy`, `dead`.
 
-**This file is never committed.** It lives only in the GitHub Actions cache. If the cache is evicted (7-day TTL), the next run pays the full discovery cost once and rebuilds it automatically — no pipeline failure, no human action needed.
+**This file is never committed.** It lives only in the GitHub Actions cache. If the cache is evicted (7-day TTL), the next run pays the full discovery cost once and rebuilds it automatically — no pipeline failure, no human action required.
 
-**Weekly audit (`audit_feeds.py`):** Runs every Sunday via `weekly-audit.yml`. Ignores cached state — retests all URLs fresh, re-runs discovery for any dead ones, writes a fresh `feed_state.json` back to cache. Outputs a GitHub Actions step summary showing which categories are healthy, which had dead URLs, and what was discovered. This is how you stay informed without having to check manually.
+**Weekly audit (`audit_feeds.py`):** Runs every Sunday via `weekly-audit.yml`. Ignores cached state — retests all URLs fresh, re-runs discovery for any dead ones, writes a fresh `feed_state.json` back to cache. Outputs a GitHub Actions step summary showing which categories are healthy, which had dead URLs, and what was discovered.
 
 ---
 
@@ -178,7 +170,7 @@ Valid `status` values: `healthy`, `dead`.
 Every story receives a composite score used for ranking within its category and for cross-category Top 5 selection.
 
 ```python
-# Recency score: linear decay from 1.0 (published now) to 0.0 (published 48+ hours ago)
+# Recency score: linear decay from 1.0 (published now) to 0.0 (published 24+ hours ago)
 hours_old = (now - published_date).total_seconds() / 3600
 recency_score = max(0.0, 1.0 - (hours_old / RECENCY_DECAY_HOURS))
 
@@ -188,6 +180,8 @@ credibility_score = (feed_credibility - 1) / 4
 # Composite score
 composite_score = (RECENCY_WEIGHT * recency_score) + (CREDIBILITY_WEIGHT * credibility_score)
 ```
+
+**Geographic multiplier** applied after composite: `final_score = composite_score * REGION_PRIORITY[region]`
 
 **Cross-category Top 5:** Normalize composite scores across the full corpus (min-max normalization) before selecting the global top 5. This prevents high-volume categories from dominating the overall section.
 
@@ -207,7 +201,23 @@ Two-pass deduplication. Run in this order.
 - If ratio ≥ `FUZZY_MATCH_THRESHOLD`, treat as duplicate. Keep higher-scored version.
 - This is O(n²) — acceptable at the scale of a daily RSS digest (~100–300 stories total).
 
-Do not add semantic similarity (sentence-transformers) to v1. It is documented as a v2 upgrade in the README. Do not implement it unless explicitly requested.
+Do not add semantic similarity (sentence-transformers) to v1. Documented as a v2 upgrade in README.
+
+---
+
+## Geographic Override Logic
+
+After fetch, stories tagged `usa` or `world` are eligible for region re-tagging if Canadian/BC signals are detected in the title or summary. This catches cross-border stories filed under a US feed (e.g., AP News covering a BC wildfire).
+
+Two-path design in `apply_geographic_overrides()`:
+
+**PRIMARY — spaCy NER (when `en_core_web_sm` is installed):**
+Extracts GPE tokens from the title. Only tokens classified as GPE are checked against signal sets — eliminates person-name false positives ("Victoria Beckham" → PERSON, not GPE).
+
+**FALLBACK — signal matching (when spaCy unavailable or misses a rare city):**
+Scans normalized title+summary using padded word-boundary matching. Strong signals fire directly. Weak signals require a `GEO_CONTEXT` word to confirm geographic usage (e.g., "victoria" alone is ambiguous; "victoria residents" is not).
+
+BC is checked before CA — it is the more specific signal.
 
 ---
 
@@ -217,12 +227,12 @@ Run after deduplication and before email generation.
 
 1. Collect all story titles and summaries into a single corpus string.
 2. Tokenize. Convert to lowercase. Remove English stopwords.
-3. Count keyword frequency.
+3. Count keyword frequency across distinct stories.
 4. Flag any keyword appearing `TREND_MIN_APPEARANCES` or more times across distinct stories.
 5. Sort by frequency descending. Take top `TREND_TOP_N`.
 6. Pass keyword list to the HTML generator for the Emerging Signals section.
 
-Use Python's built-in `collections.Counter` for frequency counting. Do not add NLTK or spaCy for v1 — they are unnecessary.
+Uses Python's built-in `collections.Counter`. No NLTK or additional NLP dependencies.
 
 ---
 
@@ -232,7 +242,7 @@ Use Python's built-in `collections.Counter` for frequency counting. Do not add N
 - Max email width: **600px**. Mobile-first.
 - No external images. No tracking pixels.
 - Every story block must include: headline (linked), source name, RSS summary (truncated to 200 characters if longer), and a "Read more" link pointing to `story.link`.
-- Section order in email: Emerging Signals → Top 5 Overall → Categories (in priority order from `rss_feeds.json`).
+- Section order in email: Emerging Signals → Top 5 (Canada) → Top 5 (USA) → Top 5 (World) → Canadian Categories → International Categories.
 - Include a timestamp in the footer: `Delivered [HH:MM UTC] · [Date] · GitHub Actions`.
 
 ---
@@ -250,7 +260,7 @@ Use Python's `logging` module throughout. Set log level to `INFO` by default. Do
 
 ## Secrets
 
-Three environment variables are required at runtime. They are injected by GitHub Actions from repository secrets. When running locally, export them manually.
+Three environment variables are required at runtime. Injected by GitHub Actions from repository secrets. Export manually for local runs.
 
 ```bash
 export RESEND_API_KEY=your_key
@@ -258,10 +268,7 @@ export RECIPIENT_EMAIL=your_email@example.com
 export SENDER_EMAIL=sender@yourdomain.com
 ```
 
-**Never:**
-- Hardcode credentials anywhere in the codebase.
-- Log credential values even partially.
-- Add `.env` files to the repository. Add `.env` to `.gitignore` immediately if you create one locally.
+Never hardcode credentials. Never log credential values. Never add `.env` to the repository.
 
 ---
 
@@ -273,6 +280,7 @@ Current dependencies are intentionally minimal:
 feedparser       # RSS parsing
 resend           # Email delivery
 python-dateutil  # Robust date parsing
+spacy            # NER for geographic override (en_core_web_sm model)
 ```
 
 `difflib` and `collections` are Python standard library — no install needed.
@@ -282,26 +290,28 @@ python-dateutil  # Robust date parsing
 2. Is this for v1 or a v2 feature? (If v2, document it in the README roadmap — do not add it now.)
 3. Does it run cleanly inside a GitHub-hosted runner without system dependencies?
 
-Do not add `numpy`, `pandas`, `nltk`, `spacy`, `transformers`, or any ML library to v1.
+Do not add `numpy`, `pandas`, `nltk`, `transformers`, or any ML library to v1.
 
 ---
 
 ## Testing
 
-There is no test suite in v1. The `workflow_dispatch` trigger in the GitHub Actions workflow serves as the integration test. Before making changes:
+Unit tests live in `tests/test_pipeline.py`. Run with:
 
-1. Run `python validate_feeds.py` locally to confirm feeds are live.
-2. Run `python main.py` locally with environment variables exported.
-3. Confirm email arrives in inbox before pushing.
+```bash
+python -m unittest discover tests
+```
 
-If you add unit tests in the future, use Python's built-in `unittest` module. Do not add `pytest` unless the test suite grows to a size that justifies it.
+Tests cover pure pipeline functions: title normalization, exact and fuzzy deduplication, story scoring, and trend detection. Functions with external I/O (feed fetching, email sending) are not unit-tested — the `workflow_dispatch` trigger in GitHub Actions serves as the integration test.
+
+If the test suite grows to warrant it, add `pytest`. Do not add it preemptively.
 
 ---
 
 ## What Not to Do
 
 - Do not use classes where functions are sufficient. The pipeline is linear — keep it that way.
-- Do not add a database. Feed health state is persisted via GitHub Actions cache only — not a database, not a committed file.
+- Do not add a database. Feed health state is persisted via GitHub Actions cache only.
 - Do not add a web server, API layer, or UI. This runs headless on a cron.
 - Do not add logging that outputs sensitive data (email addresses, API keys, full story content).
 - Do not modify files in `/digests/` manually. They are auto-managed by `archive.py`.
@@ -338,86 +348,37 @@ feat: add fuzzy deduplication pass
 fix: handle missing published_date in scorer
 config: lower fuzzy threshold to 0.80
 feeds: replace Reuters backup with AP News
-docs: update CLAUDE.md with new config param
+docs: update ARCHITECTURE.md with new config param
 ```
 
 Use lowercase. Be specific. Reference the file or module affected.
 
 ---
 
-*Keep this file current. If you change the architecture, scoring logic, schema, or pipeline order — update CLAUDE.md before closing the PR.*
+## Engineering Notes
+
+Decisions and observations recorded during development. Add an entry when something fails, a workaround is found, or an approach is confirmed solid.
 
 ---
 
-## Field Notes
-
-Running log for future Claude instances. Add an entry whenever something fails, a workaround is found, or an approach is confirmed solid. Always include the date.
-
----
-
-### What Worked
+### Confirmed Approaches
 
 | Date | Area | What | Why it worked |
 |------|------|------|---------------|
 | 2026-03-31 | Pipeline smoke test | `python main.py` end-to-end | 201 stories fetched, 9 categories ranked, 45 KB HTML generated, digest saved — validated every stage in one run |
 | 2026-03-31 | Feed resilience | 3-layer fallback (pool → autodiscovery → state cache) | Dead AP News and Reuters URLs fell through to backups automatically with zero intervention |
 | 2026-03-31 | Email delivery without domain | `SENDER_EMAIL=onboarding@resend.dev` | Resend's shared test address bypasses SPF/DKIM — pipeline runs end-to-end, emails land in spam but functional for testing |
-| 2026-03-31 | macOS pip | `pip3 install --break-system-packages` | Bypasses PEP 668 system Python restriction cleanly |
-| 2026-03-31 | mypy stubs for dateutil | `pip3 install types-python-dateutil --break-system-packages` | Resolves `import-untyped` error before running mypy |
 
 ---
 
-### What Not to Try Again
+### Do Not Repeat
 
 | Date | Area | What was tried | What to do instead |
 |------|------|----------------|--------------------|
 | 2026-03-31 | `main()` orchestration | Called `load_active_feeds()` directly | Always call `vf.validate_all_feeds()` — `load_active_feeds()` does not set `active_url`, which `fetch_stories()` requires |
-| 2026-03-31 | Intermediate smoke tests | Per-function temp scripts (`_test_fetch.py`, `_test_dedup.py`, etc.) | `python main.py` catches everything — intermediate scripts are redundant overhead |
-| 2026-03-31 | Lint cadence | `ruff` + `mypy` after every single file | Run once per logical task group — same errors caught, fewer round-trips |
-| 2026-03-31 | macOS pip | `pip install -r requirements.txt` without flags | Blocked by PEP 668 — always add `--break-system-packages` |
-| 2026-03-31 | Write tool on new files | Used Write tool without a prior Read on a non-existent file | Write requires a prior Read — use `Bash cat heredoc` for brand-new files |
-| 2026-03-31 | Skills ceremony | Installed 7 skills before writing any code | Only invoke skills that add constraints not already in CLAUDE.md — rest is ceremony |
-| 2026-03-31 | Commit granularity | Committed after every task (15+ commits on greenfield) | Commit at logical milestones: foundation → pipeline → workflows → launch |
-| 2026-03-31 | Parallel file writes | Wrote independent files sequentially | Files with no dependencies must be written in parallel — default to parallel tool calls |
+| 2026-03-31 | Intermediate smoke tests | Per-function temp scripts | `python main.py` catches everything — intermediate scripts are redundant overhead |
+| 2026-03-31 | Lint cadence | Running linter after every single file | Run once per logical task group — same errors caught, fewer round-trips |
 
 ---
 
-## User Preferences — How to Work in This Project
-
-These are execution preferences derived from retrospective review. Follow them on every implementation task.
-
-**Parallelise independent work.**
-Files with no dependencies on each other (config, requirements, registry, gitignore) must be written in parallel, not sequentially. Default to parallel tool calls unless a strict dependency exists.
-
-**One end-to-end smoke test, not per-function tests.**
-The pipeline is linear. `python main.py` validates every stage. Do not create intermediate temp test scripts for individual functions — they catch nothing the final run won't catch and add unnecessary round-trips.
-
-**One lint pass per logical group, not per file.**
-Run `ruff check --fix` + `mypy` once per task group (foundation, pipeline, workflows), not after every individual file edit.
-
-**Catch data flow gaps during planning, not during execution.**
-Before writing any code, trace how data moves through the pipeline end-to-end. Specifically: confirm which function sets a key on a dict and which function consumes it. Missing this (e.g. `active_url` propagation) costs more total time than the upfront reasoning.
-
-**Skip skills that restate CLAUDE.md.**
-Only invoke skills that add constraints not already covered here. Skills that duplicate CLAUDE.md content are ceremony — skip them.
-
-**Anticipate macOS pip constraints.**
-Always use `pip3 install --break-system-packages` on macOS with system Python. Do not wait to hit the PEP 668 error.
-
-**Fewer, meaningful commits.**
-For greenfield work: foundation → pipeline logic → workflows → launch. Do not commit after every task. Commit at logical milestones.
-
-**Project the full task sequence at session open.**
-Before responding to the first prompt, identify all tasks being asked, their required order, what can be parallelized, and what edge cases are predictable from first principles. A 30-second planning pass at the start cuts total round-trips roughly in half. Reactive, prompt-by-prompt execution is the default failure mode.
-
-**Gap analysis is a single-pass structured event, not an iterative dialogue.**
-When asked to assess quality or find gaps, cover failure modes, second-order effects, and edge cases in one pass. Do not produce a partial list and wait to be prompted for deeper analysis.
-
-**Test the original artifact, not an intermediate draft.**
-The correct sequence for skill or tool improvement: test the baseline → find all gaps → write the final version. Writing an improved draft and then testing it produces an unnecessary intermediate rewrite.
-
-**Predict OS and environment assumptions before writing any step.**
-For any script or workflow step, ask upfront: what OS-specific behaviors apply here? What git states are possible? Bugs like macOS `du` decimal output and missing remote tracking refs on new branches are predictable before writing — not discoveries during testing.
-
-**Bundle small changes into the session's final commit.**
-One-line config changes and supporting file updates belong in the same push as the main work of the session. Do not push a minor change independently if it will be followed by more changes in the same session.
+*Keep this file current. If you change the architecture, scoring logic, schema, or pipeline order — update ARCHITECTURE.md before closing the PR.*
