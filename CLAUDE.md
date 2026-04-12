@@ -6,7 +6,7 @@ This file gives Claude Code the context it needs to work effectively in this cod
 
 ## Project Purpose
 
-This is a single-recipient, zero-cost, fully automated daily news digest. It runs on GitHub Actions every morning, pulls RSS feeds across 9 categories, ranks and deduplicates stories, detects trending topics, generates an HTML email, and delivers it via Resend.
+This is a single-recipient, zero-cost, fully automated daily news digest. It runs on GitHub Actions every morning, pulls RSS feeds across 10 categories (BC/West Coast first, then Canadian, then US, then World), ranks and deduplicates stories with geographic prioritization, detects trending topics, generates an HTML email, and delivers it via Resend.
 
 There is no web server, no database, no UI, and no user input at runtime. The pipeline runs once per day and exits.
 
@@ -77,6 +77,15 @@ TREND_TOP_N = 5               # Number of trending keywords to surface
 # Archive
 ARCHIVE_RETENTION_DAYS = 90   # Files older than this are deleted by archive.py
 
+# Geographic priority multiplier applied to composite score after recency+credibility.
+# 1.25 means a BC story scoring 0.80 base becomes 1.00 — ranks above a US story at 0.90.
+REGION_PRIORITY = {
+    "canada_west": 1.25,
+    "canada":      1.15,
+    "usa":         1.00,
+    "world":       0.85,
+}
+
 # Timezone
 CRON_UTC_OFFSET = 15          # Hour (UTC) the cron fires. 15 = 7 AM PST. 14 = 7 AM PDT.
 ```
@@ -89,6 +98,7 @@ Each feed entry must follow this schema exactly. Do not add undocumented fields.
 
 ```json
 {
+  "name": "TechCrunch",
   "category": "Technology",
   "urls": [
     "https://techcrunch.com/feed/",
@@ -97,20 +107,25 @@ Each feed entry must follow this schema exactly. Do not add undocumented fields.
   ],
   "site_root": "https://techcrunch.com",
   "credibility_score": 4,
+  "region": "usa",
   "active": true
 }
 ```
 
 **Field rules:**
-- `category` must match exactly one of the 9 defined categories. Case-sensitive.
-- `urls` is an ordered array of RSS feed URLs. Tried in sequence at runtime; first working URL wins. Maintain 3–5 per category. Never leave empty.
+- `name` is the display name of the outlet shown in the email story card (e.g., `"CBC News"`, `"Globe and Mail"`). Required.
+- `category` must match exactly one of the 10 defined categories. Case-sensitive.
+- `urls` is an ordered array of RSS feed URLs. Tried in sequence at runtime; first working URL wins. Never leave empty.
 - `site_root` is the canonical homepage URL used by `feed_discovery.py` when all `urls` fail. Must be the actual HTML page where `<link rel="alternate">` tags appear — not a redirect or CDN URL.
 - `credibility_score` is an integer 1–5. Assigned manually. See README for scoring guide.
+- `region` controls geographic scoring priority. Valid values: `"canada_west"`, `"canada"`, `"usa"`, `"world"`. Required. Multipliers defined in `config.py` under `REGION_PRIORITY`.
 - `active: false` disables the entry without deleting it. Use this to temporarily pause a feed.
+
+**Important:** Each entry represents one source with one region. Do not combine sources from different regions (e.g., Canadian + US) in a single entry — create separate entries so each gets the correct region multiplier.
 
 **Valid categories (exact strings):**
 ```
-Technology, Finance, Economy, Business, Politics, World, Health, Sports, Entertainment
+BC / West Coast, Technology, Finance, Economy, Business, Politics, World, Health, Sports, Entertainment
 ```
 
 ---
@@ -391,3 +406,18 @@ Always use `pip3 install --break-system-packages` on macOS with system Python. D
 
 **Fewer, meaningful commits.**
 For greenfield work: foundation → pipeline logic → workflows → launch. Do not commit after every task. Commit at logical milestones.
+
+**Project the full task sequence at session open.**
+Before responding to the first prompt, identify all tasks being asked, their required order, what can be parallelized, and what edge cases are predictable from first principles. A 30-second planning pass at the start cuts total round-trips roughly in half. Reactive, prompt-by-prompt execution is the default failure mode.
+
+**Gap analysis is a single-pass structured event, not an iterative dialogue.**
+When asked to assess quality or find gaps, cover failure modes, second-order effects, and edge cases in one pass. Do not produce a partial list and wait to be prompted for deeper analysis.
+
+**Test the original artifact, not an intermediate draft.**
+The correct sequence for skill or tool improvement: test the baseline → find all gaps → write the final version. Writing an improved draft and then testing it produces an unnecessary intermediate rewrite.
+
+**Predict OS and environment assumptions before writing any step.**
+For any script or workflow step, ask upfront: what OS-specific behaviors apply here? What git states are possible? Bugs like macOS `du` decimal output and missing remote tracking refs on new branches are predictable before writing — not discoveries during testing.
+
+**Bundle small changes into the session's final commit.**
+One-line config changes and supporting file updates belong in the same push as the main work of the session. Do not push a minor change independently if it will be followed by more changes in the same session.

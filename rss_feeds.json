@@ -1,5 +1,19 @@
 [
   {
+    "name": "Global News BC",
+    "category": "BC / West Coast",
+    "urls": [
+      "https://globalnews.ca/bc/feed/",
+      "https://vancouversun.com/feed/",
+      "https://theprovince.com/feed/"
+    ],
+    "site_root": "https://globalnews.ca",
+    "credibility_score": 4,
+    "region": "canada_west",
+    "active": true
+  },
+  {
+    "name": "TechCrunch",
     "category": "Technology",
     "urls": [
       "https://techcrunch.com/feed/",
@@ -8,9 +22,23 @@
     ],
     "site_root": "https://techcrunch.com",
     "credibility_score": 4,
+    "region": "usa",
     "active": true
   },
   {
+    "name": "MobileSyrup",
+    "category": "Technology",
+    "urls": [
+      "https://mobilesyrup.com/feed/",
+      "https://betakit.com/feed/"
+    ],
+    "site_root": "https://mobilesyrup.com",
+    "credibility_score": 4,
+    "region": "canada",
+    "active": true
+  },
+  {
+    "name": "MarketWatch",
     "category": "Finance",
     "urls": [
       "https://feeds.marketwatch.com/marketwatch/topstories/",
@@ -19,31 +47,91 @@
     ],
     "site_root": "https://www.marketwatch.com",
     "credibility_score": 4,
+    "region": "usa",
     "active": true
   },
   {
+    "name": "National Post Financial",
+    "category": "Finance",
+    "urls": [
+      "https://nationalpost.com/category/financial-post/feed/"
+    ],
+    "site_root": "https://nationalpost.com",
+    "credibility_score": 4,
+    "region": "canada",
+    "active": true
+  },
+  {
+    "name": "AP News",
     "category": "Economy",
     "urls": [
       "https://feeds.apnews.com/rss/APf-economy",
-      "https://rss.nytimes.com/services/xml/rss/nyt/Economy.xml",
-      "https://www.economist.com/finance-and-economics/rss.xml"
+      "https://rss.nytimes.com/services/xml/rss/nyt/Economy.xml"
     ],
     "site_root": "https://apnews.com",
     "credibility_score": 5,
+    "region": "usa",
     "active": true
   },
   {
+    "name": "The Economist",
+    "category": "Economy",
+    "urls": [
+      "https://www.economist.com/finance-and-economics/rss.xml"
+    ],
+    "site_root": "https://www.economist.com",
+    "credibility_score": 5,
+    "region": "world",
+    "active": true
+  },
+  {
+    "name": "Global News Money",
+    "category": "Economy",
+    "urls": [
+      "https://globalnews.ca/money/feed/",
+      "https://financialpost.com/feed/"
+    ],
+    "site_root": "https://globalnews.ca",
+    "credibility_score": 4,
+    "region": "canada",
+    "active": true
+  },
+  {
+    "name": "Reuters",
     "category": "Business",
     "urls": [
       "https://feeds.reuters.com/reuters/businessNews",
-      "https://fortune.com/feed/",
-      "https://feeds.bloomberg.com/markets/news.rss"
+      "https://fortune.com/feed/"
     ],
     "site_root": "https://www.reuters.com",
     "credibility_score": 5,
+    "region": "world",
     "active": true
   },
   {
+    "name": "Financial Post",
+    "category": "Business",
+    "urls": [
+      "https://financialpost.com/feed/"
+    ],
+    "site_root": "https://financialpost.com",
+    "credibility_score": 4,
+    "region": "canada",
+    "active": true
+  },
+  {
+    "name": "Globe and Mail Business",
+    "category": "Business",
+    "urls": [
+      "https://www.theglobeandmail.com/arc/outboundfeeds/rss/category/business/"
+    ],
+    "site_root": "https://www.theglobeandmail.com",
+    "credibility_score": 5,
+    "region": "canada",
+    "active": true
+  },
+  {
+    "name": "Politico",
     "category": "Politics",
     "urls": [
       "https://rss.politico.com/politics-news.xml",
@@ -52,9 +140,33 @@
     ],
     "site_root": "https://www.politico.com",
     "credibility_score": 4,
+    "region": "usa",
     "active": true
   },
   {
+    "name": "National Post Politics",
+    "category": "Politics",
+    "urls": [
+      "https://nationalpost.com/category/news/politics/feed/"
+    ],
+    "site_root": "https://nationalpost.com",
+    "credibility_score": 4,
+    "region": "canada",
+    "active": true
+  },
+  {
+    "name": "Global News Politics",
+    "category": "Politics",
+    "urls": [
+      "https://globalnews.ca/politics/feed/"
+    ],
+    "site_root": "https://globalnews.ca",
+    "credibility_score": 4,
+    "region": "canada",
+    "active": true
+  },
+  {
+    "name": "BBC News",
     "category": "World",
     "urls": [
       "https://feeds.bbci.co.uk/news/world/rss.xml",
@@ -63,31 +175,90 @@
     ],
     "site_root": "https://www.bbc.com",
     "credibility_score": 5,
+    "region": "world",
     "active": true
   },
   {
+    "name": "Global News World",
+    "category": "World",
+    "urls": [
+      "https://globalnews.ca/world/feed/"
+    ],
+    "site_root": "https://globalnews.ca",
+    "credibility_score": 4,
+    "region": "canada",
+    "active": true
+  },
+  {
+    "name": "WHO",
     "category": "Health",
     "urls": [
-      "https://www.who.int/rss-feeds/news-english.xml",
-      "https://rss.webmd.com/rss/rss.aspx?RSSSource=RSS_PUBLIC",
-      "https://feeds.npr.org/1128/rss.xml"
+      "https://www.who.int/rss-feeds/news-english.xml"
     ],
     "site_root": "https://www.who.int",
     "credibility_score": 5,
+    "region": "world",
     "active": true
   },
   {
+    "name": "WebMD",
+    "category": "Health",
+    "urls": [
+      "https://rss.webmd.com/rss/rss.aspx?RSSSource=RSS_PUBLIC",
+      "https://feeds.npr.org/1128/rss.xml"
+    ],
+    "site_root": "https://www.webmd.com",
+    "credibility_score": 4,
+    "region": "usa",
+    "active": true
+  },
+  {
+    "name": "Global News Health",
+    "category": "Health",
+    "urls": [
+      "https://globalnews.ca/health/feed/"
+    ],
+    "site_root": "https://globalnews.ca",
+    "credibility_score": 4,
+    "region": "canada",
+    "active": true
+  },
+  {
+    "name": "ESPN",
     "category": "Sports",
     "urls": [
       "https://www.espn.com/espn/rss/news",
-      "https://feeds.bbci.co.uk/sport/rss.xml",
       "https://rss.nytimes.com/services/xml/rss/nyt/Sports.xml"
     ],
     "site_root": "https://www.espn.com",
     "credibility_score": 4,
+    "region": "usa",
     "active": true
   },
   {
+    "name": "BBC Sport",
+    "category": "Sports",
+    "urls": [
+      "https://feeds.bbci.co.uk/sport/rss.xml"
+    ],
+    "site_root": "https://www.bbc.com",
+    "credibility_score": 4,
+    "region": "world",
+    "active": true
+  },
+  {
+    "name": "Sportsnet",
+    "category": "Sports",
+    "urls": [
+      "https://www.sportsnet.ca/feed/"
+    ],
+    "site_root": "https://www.sportsnet.ca",
+    "credibility_score": 4,
+    "region": "canada",
+    "active": true
+  },
+  {
+    "name": "Variety",
     "category": "Entertainment",
     "urls": [
       "https://variety.com/feed/",
@@ -96,6 +267,18 @@
     ],
     "site_root": "https://variety.com",
     "credibility_score": 4,
+    "region": "usa",
+    "active": true
+  },
+  {
+    "name": "National Post Entertainment",
+    "category": "Entertainment",
+    "urls": [
+      "https://nationalpost.com/category/entertainment/feed/"
+    ],
+    "site_root": "https://nationalpost.com",
+    "credibility_score": 4,
+    "region": "canada",
     "active": true
   }
 ]

@@ -20,7 +20,9 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt
+          python -m spacy download en_core_web_sm
 
       - name: Restore feed state cache
         uses: actions/cache/restore@v4

@@ -14,10 +14,15 @@ Run before main.py. Run standalone: python validate_feeds.py
 
 import json
 import logging
+import socket
 import sys
 from datetime import datetime, timezone
 
 import feedparser
+
+# Hard cap on socket operations — prevents feedparser.parse() from hanging
+# indefinitely on a server that accepts the connection but never sends data.
+socket.setdefaulttimeout(10)
 
 from feed_discovery import discover_feed
 
