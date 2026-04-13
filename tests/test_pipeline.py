@@ -20,6 +20,7 @@ from main import (
     deduplicate_fuzzy,
     score_story,
     detect_trends,
+    apply_geographic_overrides,
 )
 
 
@@ -220,6 +221,113 @@ class TestDetectTrends(unittest.TestCase):
         ]
         trends = detect_trends(stories)
         self.assertLessEqual(len(trends), config.TREND_TOP_N)
+
+
+class TestGeographicOverrides(unittest.TestCase):
+    """
+    Tests for apply_geographic_overrides().
+
+    The function has two paths: spaCy NER (primary) and signal matching (fallback).
+    Tests that put signals in the summary exercise the fallback path directly,
+    since spaCy only processes the title. Tests with signals in the title exercise
+    both paths — whichever fires first wins.
+    """
+
+    def _make_override_story(self, title: str, summary: str = "",
+                             region: str = "usa") -> dict:
+        s = _make_story(title, region=region)
+        s["summary"] = summary
+        return s
+
+    # --- Eligibility guard ---
+
+    def test_canada_west_story_not_re_tagged(self):
+        """Stories already tagged canada_west must be skipped."""
+        story = self._make_override_story("Vancouver flooding", region="canada_west")
+        result = apply_geographic_overrides([story])
+        self.assertEqual(result[0]["region"], "canada_west")
+
+    def test_canada_story_not_re_tagged(self):
+        """Stories already tagged canada must be skipped."""
+        story = self._make_override_story("Ottawa budget vote", region="canada")
+        result = apply_geographic_overrides([story])
+        self.assertEqual(result[0]["region"], "canada")
+
+    # --- BC strong signals ---
+
+    def test_bc_strong_signal_in_title_overrides_to_canada_west(self):
+        """Unambiguous BC city in title → region becomes canada_west."""
+        story = self._make_override_story("Vancouver mayor unveils housing plan")
+        result = apply_geographic_overrides([story])
+        self.assertEqual(result[0]["region"], "canada_west")
+
+    def test_bc_strong_signal_in_summary_overrides_via_fallback(self):
+        """BC strong signal in summary (not title) exercises the fallback path."""
+        story = self._make_override_story(
+            title="Wildfire update from western Canada",
+            summary="Crews battling the blaze in the Okanagan region this morning"
+        )
+        result = apply_geographic_overrides([story])
+        self.assertEqual(result[0]["region"], "canada_west")
+
+    # --- BC weak signals ---
+
+    def test_bc_weak_signal_with_geo_context_overrides(self):
+        """Weak BC signal ('victoria') + geo_context word → canada_west."""
+        story = self._make_override_story(
+            title="Victoria residents protest new development",
+            summary=""
+        )
+        result = apply_geographic_overrides([story])
+        self.assertEqual(result[0]["region"], "canada_west")
+
+    def test_bc_weak_signal_without_geo_context_does_not_override(self):
+        """Weak BC signal alone, with no geo_context word, must not fire."""
+        story = self._make_override_story(
+            title="Victoria Beckham launches new fashion line",
+            summary=""
+        )
+        result = apply_geographic_overrides([story])
+        # Should remain usa — no geographic context to disambiguate
+        self.assertNotEqual(result[0]["region"], "canada_west")
+
+    def test_bc_weak_signal_suppressed_by_us_state(self):
+        """Weak BC signal alongside a US state name must not trigger an override."""
+        story = self._make_override_story(
+            title="Richmond Virginia residents face flooding",
+            summary=""
+        )
+        result = apply_geographic_overrides([story])
+        self.assertNotEqual(result[0]["region"], "canada_west")
+
+    # --- CA strong signals ---
+
+    def test_ca_strong_signal_overrides_to_canada(self):
+        """Unambiguous Canadian city in title → region becomes canada."""
+        story = self._make_override_story("Toronto transit strike enters third day")
+        result = apply_geographic_overrides([story])
+        self.assertEqual(result[0]["region"], "canada")
+
+    # --- BC takes priority over CA ---
+
+    def test_bc_overrides_before_ca_when_both_signals_present(self):
+        """When both BC and CA signals are present, BC wins (more specific)."""
+        story = self._make_override_story(
+            title="Vancouver and Toronto both announce housing plans"
+        )
+        result = apply_geographic_overrides([story])
+        self.assertEqual(result[0]["region"], "canada_west")
+
+    # --- World-tagged stories are eligible ---
+
+    def test_world_tagged_story_is_eligible_for_override(self):
+        """Stories tagged 'world' (not just 'usa') should also be eligible."""
+        story = self._make_override_story(
+            title="Calgary named top city for investment",
+            region="world"
+        )
+        result = apply_geographic_overrides([story])
+        self.assertEqual(result[0]["region"], "canada")
 
 
 if __name__ == "__main__":

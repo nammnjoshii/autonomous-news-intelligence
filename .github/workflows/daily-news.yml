@@ -1,4 +1,4 @@
-name: Daily News Digest
+name: Autonomous News Intelligence — Daily Digest
 
 on:
   schedule:

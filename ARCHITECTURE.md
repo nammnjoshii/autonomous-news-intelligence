@@ -1,4 +1,4 @@
-# ARCHITECTURE.md — Daily News Digest
+# ARCHITECTURE.md — Autonomous News Intelligence
 
 Engineering reference for this codebase. Covers architecture, file responsibilities, configuration, schemas, pipeline logic, and operational conventions.
 
@@ -6,7 +6,7 @@ Engineering reference for this codebase. Covers architecture, file responsibilit
 
 ## Project Purpose
 
-A single-recipient, zero-cost, fully automated daily news digest. Runs on GitHub Actions every morning, pulls RSS feeds across 10 categories (BC/West Coast first, then Canadian, then US, then World), ranks and deduplicates stories with geographic prioritization, detects trending topics, generates an HTML email, and delivers it via Resend.
+A single-recipient, zero-cost, fully automated news intelligence pipeline. Runs on GitHub Actions every morning, pulls RSS feeds across 10 categories (BC/West Coast first, then Canadian, then US, then World), ranks and deduplicates stories with geographic prioritization, detects trending topics, generates an HTML email, and delivers it via Resend.
 
 No web server. No database. No UI. No user input at runtime. The pipeline runs once per day and exits.
 

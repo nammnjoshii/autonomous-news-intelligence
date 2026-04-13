@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-main.py — Core pipeline for the Daily News Digest.
+main.py — Core pipeline for Autonomous News Intelligence.
 
 Pipeline sequence:
   1. validate feeds   — load state, try URL pool, autodiscover on failure, save state
@@ -769,7 +769,7 @@ def main() -> None:
     """
     import validate_feeds as vf
 
-    logger.info("=== Daily News Digest pipeline starting ===")
+    logger.info("=== Autonomous News Intelligence pipeline starting ===")
 
     raw_feeds = load_active_feeds()
     logger.info("Loaded %d active feeds from registry", len(raw_feeds))
@@ -808,7 +808,7 @@ def main() -> None:
         f.write(html)
     logger.info("Digest saved to %s", digest_path)
 
-    logger.info("=== Daily News Digest pipeline complete ===")
+    logger.info("=== Autonomous News Intelligence pipeline complete ===")
 
 
 if __name__ == "__main__":

@@ -1,9 +1,13 @@
-# Daily News Digest
+# Autonomous News Intelligence
 
-[![Daily Digest](https://github.com/nammnjoshii/daily-news-digest/actions/workflows/daily-news.yml/badge.svg)](https://github.com/nammnjoshii/daily-news-digest/actions/workflows/daily-news.yml)
-[![Weekly Feed Audit](https://github.com/nammnjoshii/daily-news-digest/actions/workflows/weekly-audit.yml/badge.svg)](https://github.com/nammnjoshii/daily-news-digest/actions/workflows/weekly-audit.yml)
+[![Daily Digest](https://github.com/nammnjoshii/autonomous-news-intelligence/actions/workflows/daily-news.yml/badge.svg)](https://github.com/nammnjoshii/autonomous-news-intelligence/actions/workflows/daily-news.yml)
+[![Weekly Feed Audit](https://github.com/nammnjoshii/autonomous-news-intelligence/actions/workflows/weekly-audit.yml/badge.svg)](https://github.com/nammnjoshii/autonomous-news-intelligence/actions/workflows/weekly-audit.yml)
 
-A fully automated, zero-cost news digest delivered to your inbox every morning. Built with Python and GitHub Actions. No servers. No subscriptions. No maintenance.
+A fully automated, zero-cost news intelligence pipeline delivered to your inbox every morning. Built with Python and GitHub Actions. No servers. No subscriptions. No maintenance.
+
+Built by [Nammn Joshii](https://www.linkedin.com/in/nammnjoshii/) — Senior Technical Program and Delivery Manager. A personal production system: zero-ops, zero-cost, running daily since March 2026.
+
+**Status:** Running daily since March 2026 · Delivered every morning at 7 AM Pacific · [Actions log](https://github.com/nammnjoshii/autonomous-news-intelligence/actions)
 
 ---
 
@@ -18,6 +22,12 @@ Pulls RSS feeds across 9 categories, deduplicates and ranks stories by recency a
 **Delivery:** 7 AM Pacific via Resend free tier.
 
 **Cost:** $0.
+
+---
+
+## Why This Exists
+
+Most news aggregators optimize for engagement. This one optimizes for signal-to-noise: geographic relevance (BC-first), source credibility weighting, and cross-category deduplication. It runs unattended, costs nothing, and pages me only when something actually breaks.
 
 ---
 
@@ -49,10 +59,20 @@ Archiver            →    Save to /digests/, prune files > 90 days
 
 ---
 
+## Email Output
+
+Live digest — rendered and delivered daily. Geographic tagging ([CA], [BC], [US]) applied automatically based on NER and signal matching.
+
+![Top of digest — Emerging Signals and Top 5 Canada](docs/digest-preview.png)
+
+![Mid-digest — Top 5 Canada continued and Top 5 USA](docs/digest-preview-2.png)
+
+---
+
 ## File Structure
 
 ```
-daily-news-digest/
+autonomous-news-intelligence/
 │
 ├── main.py                   # Core pipeline: fetch → dedupe → rank → email
 ├── validate_feeds.py         # Preflight: try URL pool, autodiscover on failure, save state
@@ -95,8 +115,8 @@ daily-news-digest/
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/daily-news-digest.git
-cd daily-news-digest
+git clone https://github.com/nammnjoshii/autonomous-news-intelligence.git
+cd autonomous-news-intelligence
 ```
 
 ### 2. Install Dependencies
@@ -109,7 +129,7 @@ pip install -r requirements.txt
 
 1. Create a free account at [resend.com](https://resend.com).
 2. Go to **API Keys → Create API Key**.
-3. Name it (e.g., `daily-news-digest`), set permission to **Sending access**.
+3. Name it (e.g., `autonomous-news-intelligence`), set permission to **Sending access**.
 4. Copy the key. You will not see it again.
 5. Go to **Domains** and add your sending domain, or use Resend's shared domain (`onboarding@resend.dev`) for testing only. Use your own domain for production.
 
@@ -242,7 +262,7 @@ The pipeline uses two workflows: a daily digest workflow and a weekly feed audit
 ### Daily Digest (`daily-news.yml`)
 
 ```yaml
-name: Daily News Digest
+name: Autonomous News Intelligence — Daily Digest
 
 on:
   schedule:

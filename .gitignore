@@ -21,3 +21,11 @@ CLAUDE.md
 
 # Runtime-only — persisted via GitHub Actions cache, never committed
 feed_state.json
+
+# Sample output files — reference only, not part of the repo
+Sample Output.html
+Sample Output.pdf
+Sample Output_files/
+
+# Browser automation artifacts
+.playwright-mcp/
