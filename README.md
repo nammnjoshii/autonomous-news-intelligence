@@ -448,6 +448,14 @@ No heavy dependencies. No LLM APIs. No external databases. The entire pipeline r
 
 ---
 
+## Author
+
+**Nammn Joshii** | [LinkedIn](https://www.linkedin.com/in/nammnjoshii/) | [GitHub](https://github.com/nammnjoshii)
+
+**Provenance:** Original analysis: October 2019. Repository structured for public portfolio: April 2026. The analytical findings, data, and code are unchanged from the original analysis. Documentation (program narrative, decision output, delivery plan) reflects structured retrospective framing of the 2019 work.
+
+---
+
 ## License
 
 MIT. Use it, fork it, modify it.
