@@ -13,6 +13,18 @@
     "active": true
   },
   {
+    "name": "CBC British Columbia",
+    "category": "BC / West Coast",
+    "urls": [
+      "https://www.cbc.ca/cmlink/rss-bc",
+      "https://www.cbc.ca/cmlink/rss-british-columbia"
+    ],
+    "site_root": "https://www.cbc.ca/news/canada/british-columbia",
+    "credibility_score": 5,
+    "region": "canada_west",
+    "active": true
+  },
+  {
     "name": "TechCrunch",
     "category": "Technology",
     "urls": [
@@ -39,7 +51,7 @@
   },
   {
     "name": "MarketWatch",
-    "category": "Finance",
+    "category": "Markets & Economy",
     "urls": [
       "https://feeds.marketwatch.com/marketwatch/topstories/",
       "https://www.cnbc.com/id/10000664/device/rss/rss.html",
@@ -52,7 +64,7 @@
   },
   {
     "name": "National Post Financial",
-    "category": "Finance",
+    "category": "Markets & Economy",
     "urls": [
       "https://nationalpost.com/category/financial-post/feed/"
     ],
@@ -63,7 +75,7 @@
   },
   {
     "name": "AP News",
-    "category": "Economy",
+    "category": "Markets & Economy",
     "urls": [
       "https://feeds.apnews.com/rss/APf-economy",
       "https://rss.nytimes.com/services/xml/rss/nyt/Economy.xml"
@@ -75,7 +87,7 @@
   },
   {
     "name": "The Economist",
-    "category": "Economy",
+    "category": "Markets & Economy",
     "urls": [
       "https://www.economist.com/finance-and-economics/rss.xml"
     ],
@@ -86,7 +98,7 @@
   },
   {
     "name": "Global News Money",
-    "category": "Economy",
+    "category": "Markets & Economy",
     "urls": [
       "https://globalnews.ca/money/feed/",
       "https://financialpost.com/feed/"
@@ -98,7 +110,7 @@
   },
   {
     "name": "Reuters",
-    "category": "Business",
+    "category": "Markets & Economy",
     "urls": [
       "https://feeds.reuters.com/reuters/businessNews",
       "https://fortune.com/feed/"
@@ -110,7 +122,7 @@
   },
   {
     "name": "Financial Post",
-    "category": "Business",
+    "category": "Markets & Economy",
     "urls": [
       "https://financialpost.com/feed/"
     ],
@@ -121,12 +133,45 @@
   },
   {
     "name": "Globe and Mail Business",
-    "category": "Business",
+    "category": "Markets & Economy",
     "urls": [
       "https://www.theglobeandmail.com/arc/outboundfeeds/rss/category/business/"
     ],
     "site_root": "https://www.theglobeandmail.com",
     "credibility_score": 5,
+    "region": "canada",
+    "active": true
+  },
+  {
+    "name": "Bank of Canada",
+    "category": "Markets & Economy",
+    "urls": [
+      "https://www.bankofcanada.ca/content_type/press-releases/feed/"
+    ],
+    "site_root": "https://www.bankofcanada.ca",
+    "credibility_score": 5,
+    "region": "canada",
+    "active": true
+  },
+  {
+    "name": "Global News Economy",
+    "category": "Markets & Economy",
+    "urls": [
+      "https://globalnews.ca/category/economy/feed/"
+    ],
+    "site_root": "https://globalnews.ca",
+    "credibility_score": 4,
+    "region": "canada",
+    "active": true
+  },
+  {
+    "name": "BNN Bloomberg",
+    "category": "Markets & Economy",
+    "urls": [
+      "https://www.bnnbloomberg.ca/feed"
+    ],
+    "site_root": "https://www.bnnbloomberg.ca",
+    "credibility_score": 4,
     "region": "canada",
     "active": true
   },

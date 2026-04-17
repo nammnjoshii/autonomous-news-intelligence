@@ -12,6 +12,7 @@ Pipeline sequence:
   7. send_email       — Deliver via Resend API
 """
 
+import calendar
 import hashlib
 import json
 import logging
@@ -120,17 +121,24 @@ STOPWORDS = {
     "over", "after", "before", "about", "into", "than", "not", "no",
     "says", "said", "new", "more", "also", "their", "they", "which",
     "who", "what", "how", "when", "where", "why", "s", "us", "we",
+    # Common noise words not caught above
+    "his", "her", "him", "she", "he", "our", "your", "my", "its",
+    "can", "get", "got", "out", "one", "two", "all", "any", "some",
+    "been", "being", "was", "were", "am", "are", "is", "has",
+    "just", "now", "then", "here", "there", "so", "if", "while",
+    "first", "last", "next", "year", "years", "day", "days",
+    "time", "says", "said", "week", "weeks", "make", "made",
 }
 
 # Category display order for the two geographic email sections.
+# Sports and Entertainment are rendered in a combined section at the end — not here.
+# Markets & Economy is rendered in its own group between Canada and International — not here.
 CA_CATEGORY_ORDER = [
-    "BC / West Coast", "Politics", "Business", "Economy", "Finance",
-    "Technology", "World", "Health", "Sports", "Entertainment",
+    "BC / West Coast", "Politics", "Technology", "World", "Health",
 ]
 
 INTL_CATEGORY_ORDER = [
-    "Politics", "Business", "Economy", "Finance",
-    "Technology", "World", "Health", "Sports", "Entertainment",
+    "Politics", "Technology", "Health",
 ]
 
 
@@ -277,14 +285,16 @@ def parse_published_date(entry: object) -> datetime:
     Parse publish date from a feedparser entry.
     Returns UTC-aware datetime. Falls back to datetime.now(UTC) if unparseable.
     """
-    # feedparser populates published_parsed (struct_time) when possible
-    if hasattr(entry, "published_parsed") and entry.published_parsed:
-        try:
-            import calendar
-            ts = calendar.timegm(entry.published_parsed)
-            return datetime.fromtimestamp(ts, tz=timezone.utc)
-        except Exception:
-            pass
+    # feedparser populates published_parsed (struct_time) when possible.
+    # RSS 1.0 / RDF feeds (e.g. Bank of Canada) use updated_parsed instead.
+    for attr in ("published_parsed", "updated_parsed"):
+        val = getattr(entry, attr, None)
+        if val:
+            try:
+                ts = calendar.timegm(val)
+                return datetime.fromtimestamp(ts, tz=timezone.utc)
+            except Exception:
+                pass
 
     if hasattr(entry, "published") and entry.published:
         try:
@@ -344,6 +354,13 @@ def fetch_stories(feeds: list[dict]) -> list[dict]:
             summary = re.sub(r"<[^>]+>", "", summary_raw).strip()
 
             published = parse_published_date(entry)
+
+            # Markets & Economy: keyword gate — only pass on-topic financial/policy stories.
+            if category == _MARKETS_ECONOMY:
+                text_lower = f"{title} {summary}".lower()
+                if not any(kw in text_lower for kw in _MARKETS_ECONOMY_KEYWORDS):
+                    logger.debug("M&E keyword filter dropped: %s", title)
+                    continue
 
             stories.append({
                 "title": title,
@@ -449,20 +466,100 @@ def score_story(story: dict, now: datetime) -> float:
     return base * region_multiplier
 
 
+def apply_quality_gate(sorted_stories: list[dict], min_count: int = 3) -> list[dict]:
+    """Return top stories up to MAX_STORIES_PER_CATEGORY, gating slots 4+ on score proximity.
+
+    Always returns up to min_count stories. Adds slot 4 only if its score is >= STORY_QUALITY_GATE_RATIO
+    of slot 3's score; adds slot 5 only if its score is >= STORY_QUALITY_GATE_RATIO of slot 4's score.
+    """
+    if len(sorted_stories) <= min_count:
+        return sorted_stories
+    result = list(sorted_stories[:min_count])
+    for i in range(min_count, min(len(sorted_stories), config.MAX_STORIES_PER_CATEGORY)):
+        threshold = result[-1]["composite_score"] * config.STORY_QUALITY_GATE_RATIO
+        if sorted_stories[i]["composite_score"] >= threshold:
+            result.append(sorted_stories[i])
+        else:
+            break
+    return result
+
+
+_MARKETS_ECONOMY = "Markets & Economy"
+_SPORTS_CAT = "Sports"
+_ENTERTAINMENT_CAT = "Entertainment"
+
+# Keywords that must appear in title or summary for a story to pass the Markets & Economy filter.
+# Ensures off-topic stories from financial feeds (e.g. geopolitical Reuters) don't crowd out
+# on-topic market/policy content. Case-insensitive substring match.
+_MARKETS_ECONOMY_KEYWORDS: frozenset[str] = frozenset({
+    "rate", "tsx", "s&p", "dow", "nasdaq", "fed", "inflation", "cpi", "gdp",
+    "earnings", "yield", "bond", "deficit", "boc", "monetary", "interest",
+    "trade", "tariff", "market", "bank of canada", "federal reserve",
+    "stock", "equities", "recession", "quarter", "fiscal", "currency",
+    "dollar", "loonie", "tsx composite", "bay street", "wall street",
+})
+
+# Signals required for a story to appear in the Canada Markets sub-section.
+# Prevents Canadian news outlets (e.g. Globe and Mail) from filling Canada Markets
+# with stories about US or global topics — only stories with a Canadian economic
+# signal belong there.
+_CANADA_MARKETS_SIGNALS: frozenset[str] = frozenset({
+    "canada", "canadian", "bank of canada", "boc", "tsx", "tsxv",
+    "loonie", "bay street", "toronto stock", "ottawa", "alberta",
+    "federal budget", "canada's",
+})
+
+# World-region stories must contain one of these to appear in Canada Coverage.
+# Ensures the Canada World sub-section shows Canada's role in global events,
+# not generic international news that has nothing to do with Canada.
+_CANADA_WORLD_SIGNALS: frozenset[str] = frozenset({
+    "canada", "canadian", "canadians", "canada's", "trudeau", "carney",
+    "ottawa", "parliament", "rcmp", "toronto", "montreal", "calgary",
+    "edmonton", "vancouver", "alberta", "ontario", "quebec", "bc",
+    "british columbia", "tsx", "loonie",
+})
+
+# World-region stories must contain one of these to appear in USA Coverage.
+# Ensures the USA World sub-section shows US involvement in global events,
+# not generic international news unrelated to the United States.
+_USA_WORLD_SIGNALS: frozenset[str] = frozenset({
+    "united states", "u.s.", "us ", "american", "americans", "america",
+    "trump", "biden", "harris", "pentagon", "washington", "white house",
+    "state department", "congress", "senate", "federal reserve", "fed ",
+    "wall street", "nasdaq", "s&p", "dow jones",
+})
+
+
 def score_and_rank(
     stories: list[dict],
-) -> tuple[dict[str, list[dict]], dict[str, list[dict]], list[dict], list[dict], list[dict]]:
+) -> tuple[
+    dict[str, list[dict]],
+    dict[str, list[dict]],
+    list[dict],
+    list[dict],
+    list[dict],
+    list[dict],
+    list[dict],
+    list[dict],
+]:
     """
     1. Score every story.
     2. Split stories by geographic region; rank each slice per category.
     3. Compute normalized scores across full corpus; extract three regional Top 5s.
 
+    Special category handling:
+      - Markets & Economy: 3-way split (5 CA, 5 USA, 3 World) — no quality gate.
+      - Sports / Entertainment: combined across all regions, top 3 each — no quality gate.
+
     Returns:
-        - ranked_by_category_ca: Canadian/BC stories per category (top-N each)
-        - ranked_by_category_usa_world: USA+World stories per category (top-N each)
-        - top5_canada: up to 5 highest-scoring Canada/BC stories (normalized)
-        - top5_usa: up to 5 highest-scoring USA stories (normalized)
-        - top5_world: up to 5 highest-scoring World stories (normalized)
+        ranked_by_category_ca        — CA/BC stories per category (excl. Sports, Ent)
+        ranked_by_category_usa_world — intl stories per category; for M&E = USA only
+        top5_canada                  — up to 5 top Canada/BC stories (normalized)
+        top5_usa                     — up to 5 top USA stories (normalized)
+        top5_world                   — up to 5 top World stories (normalized)
+        markets_economy_world        — top 3 World stories for Markets & Economy
+        sports_top3                  — top 3 Sports stories (all regions combined)
+        entertainment_top3           — top 3 Entertainment stories (all regions combined)
     """
     now = datetime.now(tz=timezone.utc)
 
@@ -479,17 +576,71 @@ def score_and_rank(
     # Geographic category splits — re-rank within each slice
     ranked_by_category_ca: dict[str, list[dict]] = {}
     ranked_by_category_usa_world: dict[str, list[dict]] = {}
+    markets_economy_world: list[dict] = []
+    sports_all: list[dict] = []
+    entertainment_all: list[dict] = []
 
     for cat, cat_stories in categories.items():
-        ca = [s for s in cat_stories if s.get("region") in ("canada", "canada_west")]
-        if ca:
-            ca.sort(key=lambda s: s["composite_score"], reverse=True)
-            ranked_by_category_ca[cat] = ca[: config.MAX_STORIES_PER_CATEGORY]
+        if cat == _MARKETS_ECONOMY:
+            # Canada Markets: canadian/bc stories that contain a Canadian economic signal
+            me_ca_raw = [s for s in cat_stories if s.get("region") in ("canada", "canada_west")]
+            me_ca = [
+                s for s in me_ca_raw
+                if any(sig in f"{s['title']} {s.get('summary', '')}".lower()
+                       for sig in _CANADA_MARKETS_SIGNALS)
+            ]
+            me_ca.sort(key=lambda s: s["composite_score"], reverse=True)
+            if me_ca:
+                ranked_by_category_ca[cat] = me_ca[:5]
 
-        intl = [s for s in cat_stories if s.get("region") in ("usa", "world")]
-        if intl:
-            intl.sort(key=lambda s: s["composite_score"], reverse=True)
-            ranked_by_category_usa_world[cat] = intl[: config.MAX_STORIES_PER_CATEGORY]
+            me_usa = [s for s in cat_stories if s.get("region") == "usa"]
+            me_usa.sort(key=lambda s: s["composite_score"], reverse=True)
+            if me_usa:
+                ranked_by_category_usa_world[cat] = me_usa[:5]
+
+            me_world = [s for s in cat_stories if s.get("region") == "world"]
+            me_world.sort(key=lambda s: s["composite_score"], reverse=True)
+            markets_economy_world = me_world[:3]
+
+        elif cat == _SPORTS_CAT:
+            sports_all.extend(cat_stories)
+
+        elif cat == _ENTERTAINMENT_CAT:
+            entertainment_all.extend(cat_stories)
+
+        else:
+            def _has_signal(story: dict, signals: frozenset[str]) -> bool:
+                text = f"{story['title']} {story.get('summary', '')}".lower()
+                return any(sig in text for sig in signals)
+
+            # Canada Coverage: CA/BC stories + world stories with a Canadian angle
+            ca_domestic = [s for s in cat_stories if s.get("region") in ("canada", "canada_west")]
+            ca_world = [
+                s for s in cat_stories
+                if s.get("region") == "world" and _has_signal(s, _CANADA_WORLD_SIGNALS)
+            ]
+            ca_combined = ca_domestic + ca_world
+            if ca_combined:
+                ca_combined.sort(key=lambda s: s["composite_score"], reverse=True)
+                ranked_by_category_ca[cat] = apply_quality_gate(ca_combined)
+
+            # USA Coverage: US stories + world stories with a US angle
+            usa_domestic = [s for s in cat_stories if s.get("region") == "usa"]
+            usa_world = [
+                s for s in cat_stories
+                if s.get("region") == "world" and _has_signal(s, _USA_WORLD_SIGNALS)
+            ]
+            usa_combined = usa_domestic + usa_world
+            if usa_combined:
+                usa_combined.sort(key=lambda s: s["composite_score"], reverse=True)
+                ranked_by_category_usa_world[cat] = apply_quality_gate(usa_combined)
+
+    # Sports & Entertainment combined, top 3 each (all regions)
+    sports_all.sort(key=lambda s: s["composite_score"], reverse=True)
+    sports_top3 = sports_all[:3]
+
+    entertainment_all.sort(key=lambda s: s["composite_score"], reverse=True)
+    entertainment_top3 = entertainment_all[:3]
 
     # Min-max normalization across full corpus
     all_scores = [s["composite_score"] for s in stories]
@@ -500,15 +651,42 @@ def score_and_rank(
     for story in stories:
         story["normalized_score"] = (story["composite_score"] - score_min) / score_range
 
-    # Three regional Top 5s (mutually exclusive by region tag)
+    # Collect the top story from every category section (the "champion").
+    # Champions are reserved for their section — excluded from Top 5 so that
+    # the Politics section always has its lead story, BC section has its lead story, etc.
+    # Top 5 is then built from the next-best stories per region, never touching champions.
+    champion_links: set[str] = set()
+    for section_stories in ranked_by_category_ca.values():
+        if section_stories:
+            champion_links.add(section_stories[0]["link"])
+    for section_stories in ranked_by_category_usa_world.values():
+        if section_stories:
+            champion_links.add(section_stories[0]["link"])
+    # For small fixed-size sections (M&E World, Sports, Entertainment), protect ALL
+    # their stories from Top 5 — not just the champion — since these sections have
+    # their own dedicated rendering and must never overlap with Top 5.
+    for section_stories in [markets_economy_world, sports_top3, entertainment_top3]:
+        for s in section_stories:
+            champion_links.add(s["link"])
+
+    # Three regional Top 5s — champions excluded; mutually exclusive by region tag
     canada_stories = [s for s in stories if s.get("region") in ("canada", "canada_west")]
-    top5_canada = sorted(canada_stories, key=lambda s: s["normalized_score"], reverse=True)[:5]
+    top5_canada = sorted(
+        [s for s in canada_stories if s["link"] not in champion_links],
+        key=lambda s: s["normalized_score"], reverse=True,
+    )[:5]
 
     usa_stories = [s for s in stories if s.get("region") == "usa"]
-    top5_usa = sorted(usa_stories, key=lambda s: s["normalized_score"], reverse=True)[:5]
+    top5_usa = sorted(
+        [s for s in usa_stories if s["link"] not in champion_links],
+        key=lambda s: s["normalized_score"], reverse=True,
+    )[:5]
 
     world_stories = [s for s in stories if s.get("region") == "world"]
-    top5_world = sorted(world_stories, key=lambda s: s["normalized_score"], reverse=True)[:5]
+    top5_world = sorted(
+        [s for s in world_stories if s["link"] not in champion_links],
+        key=lambda s: s["normalized_score"], reverse=True,
+    )[:5]
 
     logger.info(
         "Scored %d stories. Canadian: %d, USA: %d, World: %d. Top score: %.4f",
@@ -518,7 +696,16 @@ def score_and_rank(
         len(world_stories),
         max(all_scores) if all_scores else 0,
     )
-    return ranked_by_category_ca, ranked_by_category_usa_world, top5_canada, top5_usa, top5_world
+    return (
+        ranked_by_category_ca,
+        ranked_by_category_usa_world,
+        top5_canada,
+        top5_usa,
+        top5_world,
+        markets_economy_world,
+        sports_top3,
+        entertainment_top3,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -536,13 +723,18 @@ def detect_trends(stories: list[dict]) -> list[str]:
     4. Count frequency with collections.Counter.
     5. Return top TREND_TOP_N keywords that appear in >= TREND_MIN_APPEARANCES distinct stories.
     """
-    # Build per-story token sets (for counting distinct story appearances)
+    # Build per-story token sets: unigrams + bigrams (for counting distinct story appearances)
     story_token_sets: list[set[str]] = []
     for story in stories:
         text = (story["title"] + " " + story["summary"]).lower()
-        tokens = re.findall(r"[a-z]+", text)
-        token_set = {t for t in tokens if t not in STOPWORDS and len(t) >= 3}
-        story_token_sets.append(token_set)
+        words = re.findall(r"[a-z&']+", text)
+        unigrams = {w for w in words if w not in STOPWORDS and len(w) >= 3}
+        bigrams = {
+            f"{a} {b}"
+            for a, b in zip(words, words[1:])
+            if a not in STOPWORDS and b not in STOPWORDS and len(a) >= 3 and len(b) >= 3
+        }
+        story_token_sets.append(unigrams | bigrams)
 
     # Count how many distinct stories each keyword appears in
     keyword_story_count: Counter = Counter()
@@ -565,6 +757,69 @@ def detect_trends(stories: list[dict]) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
+# Market snapshot
+# ---------------------------------------------------------------------------
+
+_MARKET_SYMBOLS: list[tuple[str, str]] = [
+    ("^GSPC",    "S&P 500"),
+    ("^GSPTSE",  "S&P/TSX"),
+    ("^IXIC",    "NASDAQ"),
+    ("^BSESN",   "BSE Sensex"),
+    ("CADUSD=X", "CAD/USD"),
+    ("CADINR=X", "CAD/INR"),
+    ("^VIX",     "VIX"),
+]
+
+
+def fetch_market_snapshot() -> list[dict]:
+    """
+    Fetch previous-close data for 7 market indices/FX pairs via yfinance.
+
+    Returns a list of dicts with keys: label, value, change_pct.
+    If any symbol fails, returns "—" for that row.
+    If the entire fetch fails, returns an empty list (section is skipped).
+
+    All values are previous-close, not live prices — at 7 AM PDT most North American
+    and Asian markets are pre-market or closed.
+    """
+    try:
+        import yfinance as yf
+    except ImportError:
+        logger.warning("yfinance not installed — skipping market snapshot")
+        return []
+
+    results: list[dict] = []
+    for symbol, label in _MARKET_SYMBOLS:
+        try:
+            ticker = yf.Ticker(symbol)
+            hist = ticker.history(period="2d")
+            if hist.empty or len(hist) < 1:
+                results.append({"label": label, "value": "—", "change_pct": 0.0})
+                continue
+
+            prev_close = float(hist["Close"].iloc[-2]) if len(hist) >= 2 else float(hist["Close"].iloc[-1])
+            last_close = float(hist["Close"].iloc[-1])
+            change_pct = ((last_close - prev_close) / prev_close * 100) if prev_close != 0 else 0.0
+
+            # Format value: FX pairs to 4 decimal places, indices to 2
+            if "=" in symbol:
+                value_str = f"{last_close:.4f}"
+            elif symbol == "^VIX":
+                value_str = f"{last_close:.2f}"
+            else:
+                value_str = f"{last_close:,.2f}"
+
+            results.append({"label": label, "value": value_str, "change_pct": change_pct})
+
+        except Exception as exc:
+            logger.warning("Market snapshot failed for %s (%s): %s", label, symbol, exc)
+            results.append({"label": label, "value": "—", "change_pct": 0.0})
+
+    logger.info("Market snapshot fetched: %d symbols", len(results))
+    return results
+
+
+# ---------------------------------------------------------------------------
 # HTML email generation
 # ---------------------------------------------------------------------------
 
@@ -581,15 +836,19 @@ def generate_html(
     top5_canada: list[dict],
     top5_usa: list[dict],
     top5_world: list[dict],
-    trends: list[str],
+    markets_economy_world: list[dict],
+    sports_top3: list[dict],
+    entertainment_top3: list[dict],
+    market_snapshot: list[dict] | None = None,
 ) -> str:
     """
     Generate the full HTML email body.
     - Inline CSS only (no <style> blocks — email clients strip them).
     - Max width 600px, mobile-first.
     - No external images.
-    - Section order: Emerging Signals -> Top 5 Canada -> Top 5 USA -> Top 5 World
-                     -> Canada Coverage (per-category) -> International Coverage (per-category).
+    - Section order: At a Glance (optional) -> Top 5 Canada -> Top 5 USA
+                     -> Top 5 World -> Canada Coverage (CA + World) -> Markets & Economy (CA/USA/World)
+                     -> USA Coverage -> Sports & Entertainment.
     """
     now_utc = datetime.now(tz=timezone.utc)
     timestamp = now_utc.strftime("%H:%M UTC")
@@ -619,11 +878,6 @@ def generate_html(
     STORY_META_STYLE = "font-size:12px;color:#888;margin:0 0 6px 0;"
     STORY_SUMMARY_STYLE = "font-size:13px;color:#555;margin:0 0 6px 0;line-height:1.5;"
     READMORE_STYLE = "font-size:12px;color:#0066cc;"
-    TRENDS_STYLE = "padding:12px 24px;"
-    TREND_CHIP_STYLE = (
-        "display:inline-block;background-color:#e8f0fe;color:#1a1a2e;"
-        "border-radius:12px;padding:4px 10px;margin:3px;font-size:12px;font-weight:bold;"
-    )
     FOOTER_STYLE = (
         "padding:16px 24px;font-size:11px;color:#aaa;"
         "border-top:1px solid #eeeeee;text-align:center;"
@@ -635,12 +889,19 @@ def generate_html(
 
     def story_block(story: dict, index: int) -> str:
         summary = _truncate(story["summary"])
+        # Publication time: "6:42 AM" for today's stories, "Yesterday 6:42 AM" for prior-day
+        pub: datetime = story.get("published", now_utc)
+        pub_utc = pub.astimezone(timezone.utc) if pub.tzinfo else pub.replace(tzinfo=timezone.utc)
+        if pub_utc.date() == now_utc.date():
+            time_label = pub_utc.strftime("%-I:%M %p")
+        else:
+            time_label = "Yesterday " + pub_utc.strftime("%-I:%M %p")
         return (
             f'<div style="{STORY_STYLE}">'
             f'<p style="{STORY_TITLE_STYLE}">'
             f'{index}. <a href="{story["link"]}" style="{STORY_LINK_STYLE}">{story["title"]}</a>'
             f"</p>"
-            f'<p style="{STORY_META_STYLE}">{story["feed_name"]} {REGION_BADGE.get(story.get("region", "world"), "")}</p>'
+            f'<p style="{STORY_META_STYLE}">{story["feed_name"]} {REGION_BADGE.get(story.get("region", "world"), "")} &middot; {time_label}</p>'
             + (f'<p style="{STORY_SUMMARY_STYLE}">{summary}</p>' if summary else "")
             + f'<a href="{story["link"]}" style="{READMORE_STYLE}">Read more -&gt;</a>'
             f"</div>"
@@ -659,15 +920,28 @@ def generate_html(
         f"</div>"
     )
 
-    # --- Emerging Signals ---
-    parts.append(f'<div style="{SECTION_HEADER_STYLE}">&#x1F525; Emerging Signals</div>')
-    parts.append(f'<div style="{TRENDS_STYLE}">')
-    if trends:
-        for kw in trends:
-            parts.append(f'<span style="{TREND_CHIP_STYLE}">{kw.title()}</span>')
-    else:
-        parts.append('<span style="color:#888;font-size:13px;">No strong signals today.</span>')
-    parts.append("</div>")
+    # --- At a Glance market snapshot (optional) ---
+    if market_snapshot:
+        SNAPSHOT_STYLE = "padding:12px 24px;background-color:#f9f9f9;border-bottom:1px solid #e0e0e0;"
+        SNAPSHOT_TABLE_STYLE = "width:100%;border-collapse:collapse;font-size:13px;"
+        SNAPSHOT_LABEL_STYLE = "color:#555;padding:4px 8px 4px 0;"
+        SNAPSHOT_VALUE_STYLE = "color:#333;font-weight:bold;padding:4px 0;"
+        UP_STYLE = "color:#1a7a1a;font-weight:bold;"
+        DOWN_STYLE = "color:#c0392b;font-weight:bold;"
+        parts.append(f'<div style="{SECTION_HEADER_STYLE}">&#x1F4CA; At a Glance &mdash; vs. prev. close</div>')
+        parts.append(f'<div style="{SNAPSHOT_STYLE}"><table style="{SNAPSHOT_TABLE_STYLE}">')
+        for item in market_snapshot:
+            arrow = "&#x25B2;" if item["change_pct"] >= 0 else "&#x25BC;"
+            color_style = UP_STYLE if item["change_pct"] >= 0 else DOWN_STYLE
+            sign = "+" if item["change_pct"] >= 0 else ""
+            parts.append(
+                f'<tr>'
+                f'<td style="{SNAPSHOT_LABEL_STYLE}">{item["label"]}</td>'
+                f'<td style="{SNAPSHOT_VALUE_STYLE}">{item["value"]}</td>'
+                f'<td><span style="{color_style}">{arrow} {sign}{item["change_pct"]:.2f}%</span></td>'
+                f'</tr>'
+            )
+        parts.append("</table></div>")
 
     # --- Top 5 Canada ---
     if top5_canada:
@@ -687,28 +961,71 @@ def generate_html(
         for i, story in enumerate(top5_world, start=1):
             parts.append(story_block(story, i))
 
-    # Stories already rendered in Top 5 sections — exclude from category sections
+    # Top 5 links — excluded from category section rendering to prevent repeats.
+    # Champions were already excluded when Top 5 was built (in score_and_rank),
+    # so category sections always have their top story regardless of Top 5 content.
     top5_links: set[str] = {s["link"] for s in (top5_canada + top5_usa + top5_world)}
 
-    # --- Canada Coverage ---
+    # --- Canada Coverage (Canadian + BC + World stories) ---
     parts.append(f'<div style="{GROUP_HEADER_STYLE}">&#x1F1E8;&#x1F1E6; Canada Coverage</div>')
     for category in CA_CATEGORY_ORDER:
-        cat_stories = [s for s in ranked_by_category_ca.get(category, []) if s["link"] not in top5_links]
+        cat_stories = ranked_by_category_ca.get(category, [])
         if not cat_stories:
             continue
+        display = [s for s in cat_stories if s["link"] not in top5_links]
+        if not display:
+            continue
         parts.append(f'<div style="{SECTION_HEADER_STYLE}">&#x1F4C2; {category}</div>')
-        for i, story in enumerate(cat_stories, start=1):
+        for i, story in enumerate(display, start=1):
             parts.append(story_block(story, i))
 
-    # --- International Coverage ---
-    parts.append(f'<div style="{GROUP_HEADER_STYLE}">&#x1F30E; International Coverage</div>')
+    # --- Markets & Economy (standalone group — CA, USA, World sub-sections) ---
+    me_ca = ranked_by_category_ca.get(_MARKETS_ECONOMY, [])
+    me_usa = ranked_by_category_usa_world.get(_MARKETS_ECONOMY, [])
+    me_world_stories = markets_economy_world
+
+    me_ca_display = [s for s in me_ca if s["link"] not in top5_links]
+    me_usa_display = [s for s in me_usa if s["link"] not in top5_links]
+    # me_world_stories are all protected as champions — no filtering needed
+    if me_ca_display or me_usa_display or me_world_stories:
+        parts.append(f'<div style="{GROUP_HEADER_STYLE}">&#x1F4B9; Markets &amp; Economy</div>')
+        if me_ca_display:
+            parts.append(f'<div style="{SECTION_HEADER_STYLE}">&#x1F1E8;&#x1F1E6; Canada Markets</div>')
+            for i, story in enumerate(me_ca_display, start=1):
+                parts.append(story_block(story, i))
+        if me_usa_display:
+            parts.append(f'<div style="{SECTION_HEADER_STYLE}">&#x1F1FA;&#x1F1F8; US Markets</div>')
+            for i, story in enumerate(me_usa_display, start=1):
+                parts.append(story_block(story, i))
+        if me_world_stories:
+            parts.append(f'<div style="{SECTION_HEADER_STYLE}">&#x1F30D; Global Markets</div>')
+            for i, story in enumerate(me_world_stories, start=1):
+                parts.append(story_block(story, i))
+
+    # --- USA Coverage (US-only stories) ---
+    parts.append(f'<div style="{GROUP_HEADER_STYLE}">&#x1F1FA;&#x1F1F8; USA Coverage</div>')
     for category in INTL_CATEGORY_ORDER:
-        cat_stories = [s for s in ranked_by_category_usa_world.get(category, []) if s["link"] not in top5_links]
+        cat_stories = ranked_by_category_usa_world.get(category, [])
         if not cat_stories:
             continue
+        display = [s for s in cat_stories if s["link"] not in top5_links]
+        if not display:
+            continue
         parts.append(f'<div style="{SECTION_HEADER_STYLE}">&#x1F4C2; {category}</div>')
-        for i, story in enumerate(cat_stories, start=1):
+        for i, story in enumerate(display, start=1):
             parts.append(story_block(story, i))
+
+    # --- Sports & Entertainment (combined, at end of digest) ---
+    if sports_top3 or entertainment_top3:
+        parts.append(f'<div style="{GROUP_HEADER_STYLE}">&#x1F3C6; Sports &amp; Entertainment</div>')
+        if sports_top3:
+            parts.append(f'<div style="{SECTION_HEADER_STYLE}">&#x26BD; Sports</div>')
+            for i, story in enumerate(sports_top3, start=1):
+                parts.append(story_block(story, i))
+        if entertainment_top3:
+            parts.append(f'<div style="{SECTION_HEADER_STYLE}">&#x1F3AC; Entertainment</div>')
+            for i, story in enumerate(entertainment_top3, start=1):
+                parts.append(story_block(story, i))
 
     # Footer
     parts.append(
@@ -793,9 +1110,12 @@ def main() -> None:
 
     stories = apply_geographic_overrides(stories)
     stories = deduplicate(stories)
-    ranked_ca, ranked_intl, top5_canada, top5_usa, top5_world = score_and_rank(stories)
-    trends = detect_trends(stories)
-    html = generate_html(ranked_ca, ranked_intl, top5_canada, top5_usa, top5_world, trends)
+    ranked_ca, ranked_intl, top5_canada, top5_usa, top5_world, me_world, sports3, ent3 = score_and_rank(stories)
+    market_snapshot = fetch_market_snapshot()
+    html = generate_html(
+        ranked_ca, ranked_intl, top5_canada, top5_usa, top5_world,
+        me_world, sports3, ent3, market_snapshot or None,
+    )
 
     logger.info("HTML digest generated (%d bytes)", len(html))
 

@@ -2,7 +2,7 @@ name: Autonomous News Intelligence — Daily Digest
 
 on:
   schedule:
-    - cron: '0 15 * * *'   # 3 PM UTC = 7 AM PST (winter). Change to '0 14 * * *' for PDT.
+    - cron: '0 14 * * *'   # 2 PM UTC = 7 AM PDT (summer). Change to '0 15 * * *' for PST (winter).
   workflow_dispatch:         # Manual trigger for testing
 
 jobs:
