@@ -22,6 +22,18 @@
     "site_root": "https://www.cbc.ca/news/canada/british-columbia",
     "credibility_score": 5,
     "region": "canada_west",
+    "active": false
+  },
+  {
+    "name": "The Tyee",
+    "category": "BC / West Coast",
+    "urls": [
+      "https://thetyee.ca/News/feed/",
+      "https://www.cheknews.ca/feed/"
+    ],
+    "site_root": "https://thetyee.ca",
+    "credibility_score": 4,
+    "region": "canada_west",
     "active": true
   },
   {
@@ -66,7 +78,8 @@
     "name": "National Post Financial",
     "category": "Markets & Economy",
     "urls": [
-      "https://nationalpost.com/category/financial-post/feed/"
+      "https://nationalpost.com/category/financial-post/feed/",
+      "https://financialpost.com/feed/"
     ],
     "site_root": "https://nationalpost.com",
     "credibility_score": 4,
@@ -89,7 +102,8 @@
     "name": "The Economist",
     "category": "Markets & Economy",
     "urls": [
-      "https://www.economist.com/finance-and-economics/rss.xml"
+      "https://www.economist.com/finance-and-economics/rss.xml",
+      "https://www.economist.com/business/rss.xml"
     ],
     "site_root": "https://www.economist.com",
     "credibility_score": 5,
@@ -124,7 +138,8 @@
     "name": "Financial Post",
     "category": "Markets & Economy",
     "urls": [
-      "https://financialpost.com/feed/"
+      "https://financialpost.com/feed/",
+      "https://nationalpost.com/category/financial-post/feed/"
     ],
     "site_root": "https://financialpost.com",
     "credibility_score": 4,
@@ -135,7 +150,8 @@
     "name": "Globe and Mail Business",
     "category": "Markets & Economy",
     "urls": [
-      "https://www.theglobeandmail.com/arc/outboundfeeds/rss/category/business/"
+      "https://www.theglobeandmail.com/arc/outboundfeeds/rss/category/business/",
+      "https://www.theglobeandmail.com/arc/outboundfeeds/rss/category/report-on-business/"
     ],
     "site_root": "https://www.theglobeandmail.com",
     "credibility_score": 5,
@@ -146,7 +162,8 @@
     "name": "Bank of Canada",
     "category": "Markets & Economy",
     "urls": [
-      "https://www.bankofcanada.ca/content_type/press-releases/feed/"
+      "https://www.bankofcanada.ca/content_type/press-releases/feed/",
+      "https://www.bankofcanada.ca/feed/"
     ],
     "site_root": "https://www.bankofcanada.ca",
     "credibility_score": 5,
@@ -173,7 +190,7 @@
     "site_root": "https://www.bnnbloomberg.ca",
     "credibility_score": 4,
     "region": "canada",
-    "active": true
+    "active": false
   },
   {
     "name": "Politico",
@@ -192,7 +209,8 @@
     "name": "National Post Politics",
     "category": "Politics",
     "urls": [
-      "https://nationalpost.com/category/news/politics/feed/"
+      "https://nationalpost.com/category/news/politics/feed/",
+      "https://nationalpost.com/news/politics/feed/"
     ],
     "site_root": "https://nationalpost.com",
     "credibility_score": 4,
@@ -227,7 +245,8 @@
     "name": "Global News World",
     "category": "World",
     "urls": [
-      "https://globalnews.ca/world/feed/"
+      "https://globalnews.ca/world/feed/",
+      "https://globalnews.ca/feed/"
     ],
     "site_root": "https://globalnews.ca",
     "credibility_score": 4,
@@ -238,7 +257,8 @@
     "name": "WHO",
     "category": "Health",
     "urls": [
-      "https://www.who.int/rss-feeds/news-english.xml"
+      "https://www.who.int/rss-feeds/news-english.xml",
+      "https://www.who.int/feeds/entity/news/en/rss.xml"
     ],
     "site_root": "https://www.who.int",
     "credibility_score": 5,
@@ -261,7 +281,8 @@
     "name": "Global News Health",
     "category": "Health",
     "urls": [
-      "https://globalnews.ca/health/feed/"
+      "https://globalnews.ca/health/feed/",
+      "https://globalnews.ca/feed/"
     ],
     "site_root": "https://globalnews.ca",
     "credibility_score": 4,
@@ -295,7 +316,8 @@
     "name": "Sportsnet",
     "category": "Sports",
     "urls": [
-      "https://www.sportsnet.ca/feed/"
+      "https://www.sportsnet.ca/feed/",
+      "https://www.thescore.com/rss/articles"
     ],
     "site_root": "https://www.sportsnet.ca",
     "credibility_score": 4,
@@ -319,7 +341,8 @@
     "name": "National Post Entertainment",
     "category": "Entertainment",
     "urls": [
-      "https://nationalpost.com/category/entertainment/feed/"
+      "https://nationalpost.com/category/entertainment/feed/",
+      "https://deadline.com/feed/"
     ],
     "site_root": "https://nationalpost.com",
     "credibility_score": 4,

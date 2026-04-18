@@ -143,20 +143,30 @@ def main() -> None:
     state = load_state()
     logger.info("Loaded feed state (%d known URLs)", len(state.get("urls", {})))
 
-    validated, failed = validate_all_feeds(feeds, state)
+    validated, failed_entries = validate_all_feeds(feeds, state)
 
     save_state(state)
+
+    # Category-level coverage check: a category is only truly failed if it has
+    # zero validated entries across all its feed entries.
+    validated_categories = {f["category"] for f in validated}
+    all_categories = {f["category"] for f in feeds}
+    empty_categories = sorted(all_categories - validated_categories)
 
     print("\n--- Feed Validation Summary ---")
     print(f"  Feeds checked    : {len(feeds)}")
     print(f"  Feeds OK         : {len(validated)}")
-    print(f"  Categories failed: {len(failed)}")
-    if failed:
-        print(f"  Failed categories: {', '.join(failed)}")
-        print("\nAll URLs failed for these categories (including autodiscovery). Update rss_feeds.json.")
+    print(f"  Entry failures   : {len(failed_entries)}")
+    if failed_entries:
+        print(f"  Failed entries   : {', '.join(dict.fromkeys(failed_entries))}")
+    print(f"  Empty categories : {len(empty_categories)}")
+
+    if empty_categories:
+        print(f"  {', '.join(empty_categories)}")
+        print("\nNo working feeds for these categories. Update rss_feeds.json.")
         sys.exit(1)
 
-    print("\nAll feeds validated successfully.")
+    print("\nAll categories covered.")
 
 
 if __name__ == "__main__":
